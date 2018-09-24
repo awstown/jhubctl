@@ -5,7 +5,7 @@ import subprocess
 from pathlib import Path
 
 from . import env
-from .utils import  get_stack_value, get_template_dir, get_config_dir
+from .utils import  get_stack_value, get_template_dir, get_config_file
 
 client = boto3.client('cloudformation')
 waiter = client.get_waiter('stack_create_complete')
@@ -123,9 +123,11 @@ def deploy_jupyterhub_cluster(
         print(f"{cluster_name} does not exist. creating a new one.")
 
         # Create a new stack.
+        with open(os.path)
+
         stack = cf.create_stack(
             StackName=f'{cluster_name}',
-            TemplateBody=open('cluster.yml').read(),
+            TemplateBody=get_config_file("cluster.yaml"),
             Parameters=[
                 {
                     "ParameterKey": "ClusterName",
@@ -271,7 +273,7 @@ def deploy_spot_instances(
         print(f"{spot_instances_name} not found. Creating new.")
         stack = cf.create_stack(
             StackName=f'{spot_instances_name}',
-            TemplateBody=open('spot-nodes.yaml').read(),
+            TemplateBody=get_config_file("spot-nodes.yaml"),
             Parameters=[
                 {
                     "ParameterKey": "ClusterName",
@@ -315,7 +317,7 @@ def deploy_utilities_stack(
     except:
         stack = cf.create_stack(
             StackName=utilities_name, 
-            TemplateBody=open('utilities.yaml').read(),
+            TemplateBody=get_config_file("utilities.yaml"),
             Parameters=[
                 {
                     "ParameterKey": "Subnets",

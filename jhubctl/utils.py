@@ -36,3 +36,9 @@ def get_config_dir():
     path = "configs"
     base_path = os.path.dirname(os.path.abspath(__file__))
     return os.path.join(base_path, path)
+
+def get_config_file(fname):
+    config_path = os.path.join(get_config_dir(), fname)
+    with open(config_path, "r") as f: 
+        data = f.read()
+    return data
