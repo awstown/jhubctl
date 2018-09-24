@@ -17,7 +17,9 @@ from .deploy import (
 
 from .teardown import (
     teardown_jupyterhub_role,
-    teardown_jupyterhub_vpc
+    teardown_jupyterhub_vpc,
+    teardown_jupyterhub_cluster,
+    teardown_ondemand_workers
 )
 
 # Configure logging
@@ -48,7 +50,8 @@ def create_cluster(cluster_name):
     spot_instances_name = f"{cluster_name}-spot-nodes"
     utilities_name = f"{cluster_name}-utilities"
 
-    with click.progressbar(length=3) as bar:
+
+    with click.progressbar(length=4, label=f"Creating {cluster_name}...") as bar:
 
         # 1. Create role.
         role = deploy_jupyterhub_role(role_name)
@@ -67,14 +70,15 @@ def create_cluster(cluster_name):
         )
         bar.update(3)
 
-    # # Create workers.
-    # node_arn, node_instance_profile, node_instance_role, node_security_group = deploy_ondemand_workers(
-    #     workers_name,
-    #     cluster_name,
-    #     security_groups,
-    #     subnet_ids,
-    #     vpc_ids
-    # )
+        # Create workers.
+        node_arn, node_instance_profile, node_instance_role, node_security_group = deploy_ondemand_workers(
+            workers_name,
+            cluster_name,
+            security_groups,
+            subnet_ids,
+            vpc_ids
+        )
+        bar.update(4)
 
     # # Create spot instances
     # deploy_spot_instances(
@@ -156,7 +160,7 @@ def delete_cluster(cluster_name):
     spot_instances_name = f"{cluster_name}-spot-nodes"
     utilities_name = f"{cluster_name}-utilities"
 
-    with click.progressbar(length=3, label=f"Delete {cluster_name}...") as bar:
+    with click.progressbar(length=43, label=f"Delete {cluster_name}...") as bar:
 
         # 1. Teardown role.
         teardown_jupyterhub_role(role_name)
@@ -165,3 +169,9 @@ def delete_cluster(cluster_name):
         # 2. Teardown VPC
         teardown_jupyterhub_vpc(vpc_name)
         bar.update(2)
+
+        teardown_jupyterhub_cluster(cluster_name)
+        bar.update(3)
+
+        teardown_ondemand_workers(workers_name)
+        bar.update(4)

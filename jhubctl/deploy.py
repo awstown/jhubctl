@@ -139,7 +139,7 @@ def deploy_jupyterhub_cluster(
         # Create a new stack.
         stack = aws.cf.create_stack(
             StackName=f'{cluster_name}',
-            TemplateBody=get_config_file("cluster.yaml"),
+            TemplateBody=read_config_file("cluster.yaml"),
             Parameters=[
                 {
                     "ParameterKey": "ClusterName",
