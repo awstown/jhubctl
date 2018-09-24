@@ -1,0 +1,46 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'EKS Deployment for Jupyter ES'
+
+
+Parameters:
+
+  ClusterName:
+    Type: String
+    Description: Cluster Name
+    Default: JupyterES
+  
+  ControlPlaneSecurityGroup:
+    Type: String
+    Description: Control Plane Security Group
+
+  Subnets:
+    Description: The subnets where workers can be created.
+    Type: List<AWS::EC2::Subnet::Id>
+
+Resources:
+
+  EKSCluster:
+    Type: "AWS::EKS::Cluster"
+    Properties:
+      Name: !Ref ClusterName
+      ResourcesVpcConfig: 
+        SecurityGroupIds: 
+          - !Ref ControlPlaneSecurityGroup 
+        #SubnetIds: [ !Ref Subnet01, !Ref Subnet02, !Ref Subnet03 ]
+        SubnetIds: !Ref Subnets
+      RoleArn: !ImportValue JupyterES-role-RoleArn
+
+Outputs:
+
+  ClusterControlPanelSecurityGroup:
+    Description: Security group for the cluster control plane communication with worker nodes
+    Value: !Ref ControlPlaneSecurityGroup
+    # Export: 
+    #   Name: ClusterControlPlaneSecurityGroup
+
+  Cluster: 
+    Description: Cluster Name
+    Value: !Ref EKSCluster
+    # Export: 
+    #   Name: ClusterName

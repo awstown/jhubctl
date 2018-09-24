@@ -1,0 +1,55 @@
+---
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Utilities for Jupyter ES'
+
+Parameters:
+
+  Subnets:
+    Description: The subnets where workers can be created.
+    Type: List<AWS::EC2::Subnet::Id>
+
+  NodeSecurityGroup:
+    Description: The security group of the spot worker nodes
+    Type: List<AWS::EC2::SecurityGroup::Id>
+
+Resources:
+
+  HomeEFS:
+    Type: AWS::EFS::FileSystem
+    Properties:
+      Encrypted: true
+  
+  MountTarget1:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref HomeEFS
+      SubnetId:
+        Fn::Select:
+        - '0'
+        - Ref: Subnets
+      SecurityGroups: !Ref NodeSecurityGroup
+
+  MountTarget2:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref HomeEFS
+      SubnetId:
+        Fn::Select:
+        - '1'
+        - Ref: Subnets
+      SecurityGroups: !Ref NodeSecurityGroup
+
+  MountTarget3:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref HomeEFS
+      SubnetId:
+        Fn::Select:
+        - '2'
+        - Ref: Subnets
+      SecurityGroups: !Ref NodeSecurityGroup
+
+Outputs:
+  EfsId:
+    Description: HomeEFSId
+    Value: !Ref HomeEFS

@@ -1,0 +1,7 @@
+keycloak:
+  service:
+    type: LoadBalancer
+  password: tohellwithourorders
+  persistence:
+    deployPostgres: true
+    dbVendor: postgres
