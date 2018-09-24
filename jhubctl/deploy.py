@@ -5,7 +5,7 @@ import subprocess
 from pathlib import Path
 
 from . import env
-from .utils import  get_stack_value, get_template_dir, get_config_file
+from .utils import  get_stack_value, get_template_dir, read_config_file, read_param_file
 
 client = boto3.client('cloudformation')
 waiter = client.get_waiter('stack_create_complete')
@@ -80,7 +80,7 @@ def deploy_jupyterhub_vpc(vpc_name):
         stack = cf.create_stack(
             StackName=f"{vpc_name}",
             TemplateURL=env.VPC_TEMPLATE_URL,
-            Parameters=json.loads(open('params/vpc.json', 'rb').read())
+            Parameters=read_param_file("vpc.json"),
         )
         waiter.wait(StackName=stack.name)
         print(f"{vpc_name} successfully created")
@@ -215,7 +215,7 @@ def deploy_ondemand_workers(
                     "ParameterKey": "VpcId",
                     "ParameterValue": vpc_ids
                 },
-            ] + json.loads(open('params/ondemand-nodes.json', 'rb').read()),
+            ] + read_param_file("ondemand-nodes.json"),
             Capabilities=[
                 'CAPABILITY_IAM'
             ]

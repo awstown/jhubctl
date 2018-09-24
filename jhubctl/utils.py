@@ -1,4 +1,5 @@
 import os
+import json
 import subprocess
 
 def get_stack_value(stack, key):
@@ -22,13 +23,19 @@ def helm(*args, **kwargs):
     )
 
 
+def get_params_dir():
+    """Get path to Jinja templates."""
+    # THIS IS HACK... need a better method
+    path = "params"
+    base_path = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(base_path, path)
+
 def get_template_dir():
     """Get path to Jinja templates."""
     # THIS IS HACK... need a better method
     path = "templates"
     base_path = os.path.dirname(os.path.abspath(__file__))
     return os.path.join(base_path, path)
-
 
 def get_config_dir():
     """Get path to YAML configurations."""
@@ -37,8 +44,14 @@ def get_config_dir():
     base_path = os.path.dirname(os.path.abspath(__file__))
     return os.path.join(base_path, path)
 
-def get_config_file(fname):
+def read_config_file(fname):
     config_path = os.path.join(get_config_dir(), fname)
     with open(config_path, "r") as f: 
         data = f.read()
+    return data
+
+def read_param_file(fname):
+    config_path = os.path.join(get_config_dir(), fname)
+    with open(config_path, "r") as f:
+        data = json.load(f)
     return data
