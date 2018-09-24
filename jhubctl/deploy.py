@@ -2,54 +2,62 @@ import boto3
 import jinja2
 import json
 import subprocess
+import logging
 from pathlib import Path
 
+from . import aws
 from . import env
-from .utils import  get_stack_value, get_template_dir, read_config_file, read_param_file
-
-client = boto3.client('cloudformation')
-waiter = client.get_waiter('stack_create_complete')
-cf = boto3.resource('cloudformation')
-iam = boto3.client('iam')
+from .utils import (
+    get_stack_value, 
+    get_template_dir, 
+    read_config_file, 
+    read_param_file,
+    raise_if_does_not_exist,
+    ResourceDoesNotExistError
+)
 
 TEMPLATE_DIR = get_template_dir()
 
 def deploy_jupyterhub_role(role_name):
-    """
+    """Create an EKS Role on AWS for Jupyterhub Deployments with Kubernetes.
 
     Parameters
     ----------
     name : str 
         Name of jupyterhub role.
-    """
+
+    Return
+    ------
+    role_arn : str
+    """ 
     # Deploy the role.
     try:
-        print(f"Checking to see if a {role_name} exists.")
-        stack = cf.Stack(f"{role_name}")
-        print(f"{role_name} found. No need to create a new one.")
+        logging.info(f"Checking to see if a {role_name} exists.\n")
 
-    except:
-        print(f"{role_name} not found. Creating a new role name {role_name}.")
+        stack = aws.cf.Stack(f"{role_name}")
+        raise_if_does_not_exist(stack)
+
+        logging.info(f"{role_name} found. No need to create a new one.\n")
+    except ResourceDoesNotExistError:
+        logging.info(f"{role_name} not found. Creating a new role name {role_name}.\n")
 
         # Create stack
-        stack = cf.create_stack(
+        stack = aws.cf.create_stack(
             StackName=f'{role_name}',
             TemplateURL=env.ROLE_TEMPLATE_URL,
             Capabilities=[
                 'CAPABILITY_NAMED_IAM',
             ]
         )
-
         # Wait for role to be created.
-        waiter.wait(StackName=stack.name)
+        aws.waiter.wait(StackName=stack.name)
+        raise_if_does_not_exist(stack)
 
-        # TODO: Needs to actually check for successful creation.
-        print(f"{role_name} succesfully created.")
+        logging.info(f"{role_name} succesfully created.")
 
+    role_arn = get_stack_value(stack, "RoleArn")
 
-    role = get_stack_value(stack, "RoleArn")
-
-    return role
+    return role_arn
 
 
 def deploy_jupyterhub_vpc(vpc_name):
@@ -69,20 +77,26 @@ def deploy_jupyterhub_vpc(vpc_name):
     vpc_ids : 
     """
     try:
-        print(f"Checking if {vpc_name} already exists.")
-        stack = cf.Stack(f"{vpc_name}")
-        print(f"{vpc_name} already exists. No need to create a new one.")
+        logging.info(f"Checking if {vpc_name} already exists.")
+
+        stack = aws.cf.Stack(f"{vpc_name}")
+        raise_if_does_not_exist(stack)
+
+        logging.info(f"{vpc_name} already exists. No need to create a new one.")
 
     except:
 
-        print(f"{vpc_name} does not exist. Creating a new VPC named {vpc_name}.")
-        stack = cf.create_stack(
+        logging.info(f"{vpc_name} does not exist. Creating a new VPC named {vpc_name}.")
+
+        stack = aws.cf.create_stack(
             StackName=f"{vpc_name}",
             TemplateURL=env.VPC_TEMPLATE_URL,
             Parameters=read_param_file("vpc.json"),
         )
-        waiter.wait(StackName=stack.name)
-        print(f"{vpc_name} successfully created")
+        aws.waiter.wait(StackName=stack.name)
+        raise_if_does_not_exist(stack)
+
+        logging.info(f"{vpc_name} successfully created")
 
     # Rip out necessary data for moving forward.
     security_groups = get_stack_value(stack, 'SecurityGroups')
@@ -110,19 +124,20 @@ def deploy_jupyterhub_cluster(
     """
 
     try:
-        print(f"Checking if {cluster_name} already exists.")
+        logging.info(f"Checking if {cluster_name} already exists.")
         
         # Get stack.
-        stack = cf.Stack(f'{cluster_name}')
-        waiter.wait(StackName=stack.name)
+        stack = aws.cf.Stack(f'{cluster_name}')
+        aws.waiter.wait(StackName=stack.name)
+        raise_if_does_not_exist(stack)
 
-        print(f"{cluster_name} already exists. No need to create a new one.")
+        logging.info(f"{cluster_name} already exists. No need to create a new one.")
 
     except:
-        print(f"{cluster_name} does not exist. creating a new one.")
+        logging.info(f"{cluster_name} does not exist. creating a new one.")
 
         # Create a new stack.
-        stack = cf.create_stack(
+        stack = aws.cf.create_stack(
             StackName=f'{cluster_name}',
             TemplateBody=get_config_file("cluster.yaml"),
             Parameters=[
@@ -140,8 +155,10 @@ def deploy_jupyterhub_cluster(
                 },
             ]
         )
-        waiter.wait(StackName=stack.name)
-        print(f"{cluster_name} successfully created")
+        aws.waiter.wait(StackName=stack.name)
+        raise_if_does_not_exist(stack)
+
+        logging.info(f"{cluster_name} successfully created")
 
     # Get response from eks.
     client = boto3.client('eks')
@@ -184,15 +201,18 @@ def deploy_ondemand_workers(
     node_security_group : 
     """
     try:
-        print(f"Checking if {workers_name} already exists.")
-        stack = cf.Stack(f'{workers_name}')
-        waiter.wait(StackName=stack.name)
-        print(f"{workers_name} already exists. No need to create a new one.")
+        logging.info(f"Checking if {workers_name} already exists.")
+
+        stack = aws.cf.Stack(f'{workers_name}')
+        aws.waiter.wait(StackName=stack.name)
+        raise_if_does_not_exist(stack)
+
+        logging.info(f"{workers_name} already exists. No need to create a new one.")
 
     except:
 
-        print(f"{workers_name} not found. Creating new workers.")
-        stack = cf.create_stack(
+        logging.info(f"{workers_name} not found. Creating new workers.")
+        stack = aws.cf.create_stack(
             StackName=f'{workers_name}',
             TemplateURL=env.NODE_TEMPLATE_URL,
             Parameters=[
@@ -217,8 +237,10 @@ def deploy_ondemand_workers(
                 'CAPABILITY_IAM'
             ]
         )
-        waiter.wait(StackName=stack.name)
-        print(f"{workers_name} successfully created")
+        aws.waiter.wait(StackName=stack.name)
+        raise_if_does_not_exist(stack)
+
+        logging.info(f"{workers_name} successfully created")
 
     node_arn = get_stack_value(stack, 'NodeInstanceRole')
     node_instance_profile = stack.Resource(
@@ -260,15 +282,17 @@ def deploy_spot_instances(
     -------
     """
     try:
-        print(f"Checking if {spot_instances_name} already exists.")
-        stack = cf.Stack(f'{spot_instances_name}')
-        waiter.wait(StackName=stack.name)
-        print(f"{spot_instances_name} already exists. No need to create new ones.")
+        logging.info(f"Checking if {spot_instances_name} already exists.")
+        stack = aws.cf.Stack(f'{spot_instances_name}')
+        aws.waiter.wait(StackName=stack.name)
+        raise_if_does_not_exist(stack)
+
+        logging.info(f"{spot_instances_name} already exists. No need to create new ones.")
 
     except:
 
-        print(f"{spot_instances_name} not found. Creating new.")
-        stack = cf.create_stack(
+        logging.info(f"{spot_instances_name} not found. Creating new.")
+        stack = aws.cf.create_stack(
             StackName=f'{spot_instances_name}',
             TemplateBody=get_config_file("spot-nodes.yaml"),
             Parameters=[
@@ -294,8 +318,10 @@ def deploy_spot_instances(
                 },
             ],
         )
-        waiter.wait(StackName=stack.name)
-        print(f"{spot_instances_name} successfully created.")
+        aws.waiter.wait(StackName=stack.name)
+        raise_if_does_not_exist(stack)
+
+        logging.info(f"{spot_instances_name} successfully created.")
 
 
 
@@ -308,11 +334,12 @@ def deploy_utilities_stack(
     """
     """
     try:
-        stack = cf.Stack(utilities_name)
-        waiter.wait(StackName=stack.name)
-        
+        stack = aws.cf.Stack(utilities_name)
+        aws.waiter.wait(StackName=stack.name)
+        raise_if_does_not_exist(stack)
+
     except:
-        stack = cf.create_stack(
+        stack = aws.cf.create_stack(
             StackName=utilities_name, 
             TemplateBody=get_config_file("utilities.yaml"),
             Parameters=[
@@ -326,7 +353,8 @@ def deploy_utilities_stack(
                 }
             ]
         )
-        waiter.wait(StackName=stack.name)
+        aws.waiter.wait(StackName=stack.name)
+        raise_if_does_not_exist(stack)
 
     efs_id = get_stack_value(stack, 'efsId')
     return efs_id
@@ -373,7 +401,7 @@ def write_auth_cm(node_arn):
     return admins, auth_fname
 
 
-def deploy_efs_profivisioner(
+def write_efs_profivisioner(
     cluster_name,
     efs_id
     ):

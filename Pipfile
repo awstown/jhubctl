@@ -5,6 +5,8 @@ name = "pypi"
 
 [packages]
 jhubctl = {editable = true, path = "."}
+ipython = "*"
+click-log = "*"
 
 [dev-packages]
 
