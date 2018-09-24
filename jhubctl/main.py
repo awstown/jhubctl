@@ -8,7 +8,9 @@ from .deploy import (
     deploy_ondemand_workers,
     deploy_spot_instances,
     deploy_utilities_stack,
-    deploy_efs_profivisioner
+    deploy_efs_profivisioner,
+    write_auth_cm,
+    write_kube_config
 )
 
 @click.group()
