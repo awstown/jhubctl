@@ -12,3 +12,10 @@ $ jhubctl list hubs
 DATA_301
 STAT_331
 ```
+
+## Install
+
+Clone this repo, change into the main directory, and run:
+```
+pip install -e .
+```
