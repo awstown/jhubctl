@@ -13,7 +13,6 @@ cf = boto3.resource('cloudformation')
 iam = boto3.client('iam')
 
 TEMPLATE_DIR = get_template_dir()
-CONFIGS_DIR = get_config_dir()
 
 def deploy_jupyterhub_role(role_name):
     """
@@ -123,8 +122,6 @@ def deploy_jupyterhub_cluster(
         print(f"{cluster_name} does not exist. creating a new one.")
 
         # Create a new stack.
-        with open(os.path)
-
         stack = cf.create_stack(
             StackName=f'{cluster_name}',
             TemplateBody=get_config_file("cluster.yaml"),

@@ -8,7 +8,6 @@ def get_stack_value(stack, key):
             return output['OutputValue']
 
 
-
 def kubectl(*args, **kwargs):
     return subprocess.check_call(
         ('kubectl',) + args
@@ -30,12 +29,14 @@ def get_params_dir():
     base_path = os.path.dirname(os.path.abspath(__file__))
     return os.path.join(base_path, path)
 
+
 def get_template_dir():
     """Get path to Jinja templates."""
     # THIS IS HACK... need a better method
     path = "templates"
     base_path = os.path.dirname(os.path.abspath(__file__))
     return os.path.join(base_path, path)
+
 
 def get_config_dir():
     """Get path to YAML configurations."""
@@ -44,11 +45,13 @@ def get_config_dir():
     base_path = os.path.dirname(os.path.abspath(__file__))
     return os.path.join(base_path, path)
 
+
 def read_config_file(fname):
     config_path = os.path.join(get_config_dir(), fname)
     with open(config_path, "r") as f: 
         data = f.read()
     return data
+
 
 def read_param_file(fname):
     config_path = os.path.join(get_config_dir(), fname)
