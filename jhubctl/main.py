@@ -1,8 +1,8 @@
+import os
 import click
 import logging
 import click_log
 
-from .utils import kubectl, helm
 from .deploy import (
     deploy_jupyterhub_role,
     deploy_jupyterhub_vpc,
@@ -10,6 +10,7 @@ from .deploy import (
     deploy_ondemand_workers,
     deploy_spot_instances,
     deploy_utilities_stack,
+    deploy_hub,
     write_auth_cm,
     write_kube_config,
     write_efs_profivisioner
@@ -19,7 +20,8 @@ from .teardown import (
     teardown_jupyterhub_role,
     teardown_jupyterhub_vpc,
     teardown_jupyterhub_cluster,
-    teardown_ondemand_workers
+    teardown_ondemand_workers,
+    teardown_spot_instances
 )
 
 # Configure logging
@@ -51,7 +53,7 @@ def create_cluster(cluster_name):
     utilities_name = f"{cluster_name}-utilities"
 
 
-    with click.progressbar(length=4, label=f"Creating {cluster_name}...") as bar:
+    with click.progressbar(length=8, label=f"Creating {cluster_name}...") as bar:
 
         # 1. Create role.
         role = deploy_jupyterhub_role(role_name)
@@ -70,7 +72,7 @@ def create_cluster(cluster_name):
         )
         bar.update(3)
 
-        # Create workers.
+        # 4. Create workers.
         node_arn, node_instance_profile, node_instance_role, node_security_group = deploy_ondemand_workers(
             workers_name,
             cluster_name,
@@ -80,66 +82,48 @@ def create_cluster(cluster_name):
         )
         bar.update(4)
 
-    # # Create spot instances
-    # deploy_spot_instances(
-    #     spot_instances_name,
-    #     cluster_name,
-    #     subnet_ids,
-    #     node_instance_profile,
-    #     node_instance_role,
-    #     node_security_group
-    # )
+        # 5. Create spot instances
+        deploy_spot_instances(
+            spot_instances_name,
+            cluster_name,
+            subnet_ids,
+            node_instance_profile,
+            node_instance_role,
+            node_security_group
+        )
+        bar.update(5)
 
-    # # Write kubectl configuration file.
-    # write_kube_config(
-    #     cluster_name,
-    #     endpoint_url,
-    #     ca_cert
-    # )
-    
-    # # Generate aws-auth-cm.yaml and apply to cluster.
-    # admins, aws_auth_fname = write_auth_cm(
-    #     node_arn, 
-    # )
+        # 6. Setup utilities.
+        efs_id = deploy_utilities_stack(
+            utilities_name,
+            cluster_name,
+            subnet_ids,
+            node_security_group
+        )
+        bar.update(6)
 
-    # efs_id = deploy_utilities_stack(
-    #     utilities_name,
-    #     cluster_name,
-    #     subnet_ids,
-    #     node_security_group
-    # )
+        # Write kubectl configuration file.
+        kubectl_config_path = write_kube_config(
+            cluster_name,
+            endpoint_url,
+            ca_cert
+        )
 
-    # # apply aws authentication configuratio map
-    # kubectl("apply", "-f", "aws-auth-cm.yaml")
+        os.environ["KUBECONFIG"] = kubectl_config_path
+        
+        # Generate aws-auth-cm.yaml and apply to cluster.
+        admins, aws_auth_fname = write_auth_cm(
+            node_arn, 
+        )
 
-    # # Create storage class.
-    # try:
-    #     kubectl("apply", "-f", "storageclass.yaml")
-    # except:
-    #     kubectl("delete", "storageclass", "gp2")
+        write_efs_profivisioner(
+            cluster_name,
+            efs_id
+        )
+        bar.update(7)
 
-    # try:
-    #     kubectl('--namespace', 'kube-system', 'create', 'serviceaccount', 'tiller')
-    # except:
-    #     kubectl('-n', 'kube-system', 'get', 'serviceaccount', 'tiller')
-
-    # try:
-    #     kubectl('create', 'clusterrolebinding', 'tiller',
-    #             '--clusterrole=cluster-admin', '--serviceaccount=kube-system:tiller')
-    # except:
-    #     kubectl('get', 'clusterrolebinding', 'tiller')
-
-    # # Inititalize Helm/Tiller for the cluster
-    # helm('init', '--service-account', 'tiller')
-
-    # kubectl('-n', 'kube-system', 'apply', '-f', 'efs-provisioner.yaml')
-
-    # write_efs_profivisioner(
-    #     cluster_name,
-    #     efs_id
-    # )
-
-    # kubectl('-n', 'utilities', 'apply', '-f', 'efs-provisioner.yaml')
+        deploy_hub()
+        bar.update(8)
 
 
 @cli.group()
@@ -160,7 +144,7 @@ def delete_cluster(cluster_name):
     spot_instances_name = f"{cluster_name}-spot-nodes"
     utilities_name = f"{cluster_name}-utilities"
 
-    with click.progressbar(length=43, label=f"Delete {cluster_name}...") as bar:
+    with click.progressbar(length=5, label=f"Delete {cluster_name}...") as bar:
 
         # 1. Teardown role.
         teardown_jupyterhub_role(role_name)
@@ -170,8 +154,14 @@ def delete_cluster(cluster_name):
         teardown_jupyterhub_vpc(vpc_name)
         bar.update(2)
 
+        # 3. Teardown Cluster
         teardown_jupyterhub_cluster(cluster_name)
         bar.update(3)
 
+        # 4. Teardown Workers
         teardown_ondemand_workers(workers_name)
         bar.update(4)
+
+        # 5. Teardown spot instances
+        teardown_spot_instances(spot_instances_name)
+        bar.update(5)

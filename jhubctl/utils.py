@@ -31,7 +31,7 @@ def get_stack_value(stack, key):
 
 def kubectl(*args, **kwargs):
     return subprocess.check_call(
-        ('kubectl',) + args
+        ('kubectl',) + args,
         **kwargs
     )
 

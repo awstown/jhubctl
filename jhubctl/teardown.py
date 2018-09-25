@@ -8,6 +8,11 @@ from .utils import (
     ResourceDoesNotExistError
 )
 
+
+## Note: the following functions are just placeholders. More checking
+#        is needed to prevent bad teardown requests.
+
+
 def teardown_jupyterhub_role(role_name):
     """Teardown an EKS role and remove from resource list."""
     # Deploy the role.
@@ -74,3 +79,20 @@ def teardown_ondemand_workers(workers_name):
 
     except ResourceDoesNotExistError:
         logging.info(f"{workers_name} does not exist.\n")
+
+
+def teardown_spot_instances(spot_instance_name):
+    """Teardown spot instances and remove from cloudformation list."""
+    # Deploy the role.
+    try:
+        logging.info(f"Checking that {spot_instance_name} exists.\n")
+
+        stack = aws.cf.Stack(f"{spot_instance_name}")
+        raise_if_does_not_exist(stack)
+        response = aws.client.delete_stack(
+            StackName=spot_instance_name
+        )
+        logging.info(f"{spot_instance_name} deleted.\n")
+
+    except ResourceDoesNotExistError:
+        logging.info(f"{spot_instance_name} does not exist.\n")

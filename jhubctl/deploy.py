@@ -1,3 +1,4 @@
+import os
 import boto3
 import jinja2
 import json
@@ -8,6 +9,9 @@ from pathlib import Path
 from . import aws
 from . import env
 from .utils import (
+    kubectl,
+    helm,
+    get_config_dir,
     get_stack_value, 
     get_template_dir, 
     read_config_file, 
@@ -294,7 +298,7 @@ def deploy_spot_instances(
         logging.info(f"{spot_instances_name} not found. Creating new.")
         stack = aws.cf.create_stack(
             StackName=f'{spot_instances_name}',
-            TemplateBody=get_config_file("spot-nodes.yaml"),
+            TemplateBody=read_config_file("spot-nodes.yaml"),
             Parameters=[
                 {
                     "ParameterKey": "ClusterName",
@@ -341,15 +345,15 @@ def deploy_utilities_stack(
     except:
         stack = aws.cf.create_stack(
             StackName=utilities_name, 
-            TemplateBody=get_config_file("utilities.yaml"),
+            TemplateBody=read_config_file("utilities.yaml"),
             Parameters=[
                 {
                     "ParameterKey": "Subnets",
-                    "ParameterValue": SUBNET_IDS
+                    "ParameterValue": subnet_ids
                 },
                 {
                     "ParameterKey": "NodeSecurityGroup",
-                    "ParameterValue": NODE_SECURITY_GROUP
+                    "ParameterValue": node_security_group
                 }
             ]
         )
@@ -376,15 +380,18 @@ def write_kube_config(
         ca_cert=ca_cert,
         cluster_name=cluster_name)
 
-    with open(f'{Path.home()}/.kube/kubeconfig-{cluster_name}', 'w') as ofile:
+    config_path = f'{Path.home()}/.kube/kubeconfig-{cluster_name}'
+    with open(config_path, 'w') as ofile:
         ofile.writelines(output_text)
+
+    return config_path
 
 
 def write_auth_cm(node_arn):
     """
     """
     # Get admins
-    admins = iam.get_group(GroupName="admin")["Users"]
+    admins = aws.iam.get_group(GroupName="admin")["Users"]
 
     ## Apply ARN of instance role of worker nodes and apply to cluster
     template_loader = jinja2.FileSystemLoader(searchpath=TEMPLATE_DIR)
@@ -419,3 +426,36 @@ def write_efs_profivisioner(
 
     with open('efs-provisioner.yaml', 'w') as ofile:
         ofile.writelines(output_text)
+
+
+def deploy_hub():
+    """Use kubectl to deploy jupyterhub.
+    """
+
+    # apply aws authentication configuratio map
+    kubectl("apply", "-f", "aws-auth-cm.yaml")
+
+    # Create storage class.
+    try:
+        config_file = os.path.join(get_config_dir(), "storageclass.yaml")
+        kubectl("apply", "-f", config_file)
+    except:
+        kubectl("delete", "storageclass", "gp2")
+
+    try:
+        kubectl('--namespace', 'kube-system',
+                'create', 'serviceaccount', 'tiller')
+    except:
+        kubectl('-n', 'kube-system', 'get', 'serviceaccount', 'tiller')
+
+    try:
+        kubectl('create', 'clusterrolebinding', 'tiller',
+                '--clusterrole=cluster-admin', '--serviceaccount=kube-system:tiller')
+    except:
+        kubectl('get', 'clusterrolebinding', 'tiller')
+
+    # Inititalize Helm/Tiller for the cluster
+    helm('init', '--service-account', 'tiller')
+    kubectl('-n', 'kube-system', 'apply', '-f', 'efs-provisioner.yaml')
+
+    kubectl()
