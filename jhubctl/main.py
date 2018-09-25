@@ -3,18 +3,9 @@ import click
 import logging
 import click_log
 
-from .deploy import (
-    deploy_jupyterhub_role,
-    deploy_jupyterhub_vpc,
-    deploy_jupyterhub_cluster,
-    deploy_ondemand_workers,
-    deploy_spot_instances,
-    deploy_utilities_stack,
-    deploy_hub,
-    write_auth_cm,
-    write_kube_config,
-    write_efs_profivisioner
-)
+from . import aws
+from . import kube
+from . import hub
 
 from .teardown import (
     teardown_jupyterhub_role,
@@ -53,18 +44,18 @@ def create_cluster(cluster_name):
     utilities_name = f"{cluster_name}-utilities"
 
 
-    with click.progressbar(length=8, label=f"Creating {cluster_name}...") as bar:
+    with click.progressbar(length=9, label=f"Creating {cluster_name}...") as bar:
 
         # 1. Create role.
-        role = deploy_jupyterhub_role(role_name)
+        role = aws.deploy_eks_role(role_name)
         bar.update(1)
 
         # 2. Create VPC.
-        security_groups, subnet_ids, vpc_ids = deploy_jupyterhub_vpc(vpc_name) 
+        security_groups, subnet_ids, vpc_ids = aws.deploy_vpc(vpc_name) 
         bar.update(2)
 
         # 3. Create cluster
-        endpoint_url, ca_cert = deploy_jupyterhub_cluster(
+        endpoint_url, ca_cert = aws.deploy_cluster(
             cluster_name=cluster_name,
             security_groups=security_groups,
             subnet_ids=subnet_ids,
@@ -73,7 +64,7 @@ def create_cluster(cluster_name):
         bar.update(3)
 
         # 4. Create workers.
-        node_arn, node_instance_profile, node_instance_role, node_security_group = deploy_ondemand_workers(
+        node_arn, node_instance_profile, node_instance_role, node_security_group = aws.deploy_ondemand_workers(
             workers_name,
             cluster_name,
             security_groups,
@@ -83,7 +74,7 @@ def create_cluster(cluster_name):
         bar.update(4)
 
         # 5. Create spot instances
-        deploy_spot_instances(
+        aws.deploy_spot_instances(
             spot_instances_name,
             cluster_name,
             subnet_ids,
@@ -94,7 +85,7 @@ def create_cluster(cluster_name):
         bar.update(5)
 
         # 6. Setup utilities.
-        efs_id = deploy_utilities_stack(
+        efs_id = aws.deploy_utilities_stack(
             utilities_name,
             cluster_name,
             subnet_ids,
@@ -102,28 +93,31 @@ def create_cluster(cluster_name):
         )
         bar.update(6)
 
-        # Write kubectl configuration file.
-        kubectl_config_path = write_kube_config(
+        # Generate aws-auth-cm.yaml and apply to cluster.
+        aws.write_auth_cm(node_arn)
+
+        # 
+        aws.write_efs_profivisioner(
+            cluster_name,
+            efs_id
+        )
+        bar.update(7)
+
+        # Configure Kubectl
+        kubectl_config_path = kube.write_kube_config(
             cluster_name,
             endpoint_url,
             ca_cert
         )
 
         os.environ["KUBECONFIG"] = kubectl_config_path
-        
-        # Generate aws-auth-cm.yaml and apply to cluster.
-        admins, aws_auth_fname = write_auth_cm(
-            node_arn, 
-        )
 
-        write_efs_profivisioner(
-            cluster_name,
-            efs_id
-        )
-        bar.update(7)
-
-        deploy_hub()
+        kube.deploy_kube()
         bar.update(8)
+
+        hub.deploy_jupyterhub()
+        bar.update(9)
+
 
 
 @cli.group()
@@ -165,3 +159,16 @@ def delete_cluster(cluster_name):
         # 5. Teardown spot instances
         teardown_spot_instances(spot_instances_name)
         bar.update(5)
+
+
+
+
+@cli.group()
+@click_log.simple_verbosity_option(logger)
+def describe():
+    """Show details of a specific Jupyterhub deployment."""
+
+
+@cli.command("list")
+def list_clusters():
+    pass

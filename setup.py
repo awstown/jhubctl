@@ -23,6 +23,9 @@ REQUIRED = [
     "jinja2",
 ]
 
+# Setup kube directory.
+
+
 setup(
     name=NAME,
     version="0.1",
