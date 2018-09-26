@@ -93,7 +93,7 @@ def read_param_file(fname):
 
 def read_deployment_file(cluster_name, fname):
     """Read a file from the deployment directory (in ~/.kube/{cluster_name})."""
-    fpath = os.path.join(get_deployment_path(cluster_name), fname):
+    fpath = os.path.join(get_deployment_path(cluster_name), fname)
     with open(fname, "r") as f:
         data = f.read()
     return data
