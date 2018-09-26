@@ -15,6 +15,25 @@ DATA_301
 STAT_331
 ```
 
+```
+$ jhubctl get cluster
+3 clusters found:
+prod [default]
+test
+dev
+
+# lists only hubs in default cluster (prod)
+$ jhubctl get jhub 
+data301
+stat350
+wissellab
+
+# list hubs in dev cluster
+$ jhubctl get jhub --cluster dev 
+s3jhub
+cool-new-hub-feature
+```
+
 ## Install
 
 Clone this repo, change into the main directory, and run:
