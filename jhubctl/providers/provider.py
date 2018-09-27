@@ -31,6 +31,6 @@ class Provider(object):
         """Teardown cluster."""
         raise Exception("Must be implemented in a subclass.")
 
-    def reset_progressbar(self, length, label="Starting cluster."):
+    def reset_progressbar(self, length, label="Starting cluster:"):
         self.bar = click.progressbar(length=length, label=label)
         self.bar.update()

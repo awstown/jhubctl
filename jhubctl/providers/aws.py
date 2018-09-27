@@ -26,7 +26,6 @@ iam = boto3.client('iam')
 ROLE_TEMPLATE_URL = "https://amazon-eks.s3-us-west-2.amazonaws.com/cloudformation/2018-08-30/amazon-eks-service-role.yaml"
 VPC_TEMPLATE_URL = "https://amazon-eks.s3-us-west-2.amazonaws.com/cloudformation/2018-08-30/amazon-eks-vpc-sample.yaml"
 NODE_TEMPLATE_URL = "https://amazon-eks.s3-us-west-2.amazonaws.com/cloudformation/2018-08-30/amazon-eks-nodegroup.yaml"
-SPOT_TEMPLATE_URL = "https://raw.githubusercontent.com/townsenddw/k8s-eks-deploy/master/spot-nodes.yaml"
 
 
 class ResourceDoesNotExistError(Exception):
@@ -401,6 +400,22 @@ def deploy_utilities_stack(
     return efs_id
 
 
+def teardown_stack(stack_name):
+    """Teardown a stack."""
+    try:
+        logging.info(f"Checking that {stack_name} exists.\n")
+
+        stack = cf.Stack(f"{stack_name}")
+        raise_if_does_not_exist(stack)
+        response = client.delete_stack(
+            StackName=stack_name
+        )
+        logging.info(f"{stack_name} deleted.\n")
+
+    except aws.ResourceDoesNotExistError:
+        logging.info(f"{stack_name} does not exist.\n")
+
+
 class AWS_EKS(Provider):
     """AWS EKS Cluster.
 
@@ -547,3 +562,19 @@ class AWS_EKS(Provider):
             self.subnet_ids,
             self.node_security_group
         )
+
+    def teardown_cluster(self, progressbar=True):
+        """Teardown an AWS EKS cluster."""
+        if progressbar:
+            self.reset_progressbar(length=6)
+        self.teardown_stack(self.utilities_name)
+        self.teardown_stack(self.spot_instances_name)
+        self.teardown_stack(self.workers_name)
+        self.teardown_stack(self.cluster_name)
+        self.teardown_stack(self.vpc_name)
+        self.teardown_stack(self.role_name)
+
+
+    @update_progress
+    def teardown_stack(self, stack_name):
+        teardown_stack(stack_name)
