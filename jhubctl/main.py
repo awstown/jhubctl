@@ -172,3 +172,15 @@ def describe():
 @cli.command("list")
 def list_clusters():
     pass
+
+@cli.group()
+@click_log.simple_verbosity_option(logger)
+def config():
+    """Export kubeconfig file to home dir..."""
+
+@config.command("export-kubeconfig")
+@click.argument("cluster_name")
+def export_kubeconfig(cluster_name):
+    """Exports kubeconfig for cluster_name to ~/.kube/kubeconfig-<cluster_name>
+    """
+
