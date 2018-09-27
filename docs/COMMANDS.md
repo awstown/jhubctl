@@ -1,8 +1,9 @@
 # Command Structure
 
-jhubctl
+    Usage:
+    jhubctl [flags] [Options] <command> Resource
 
-    Core Commands:
+    Commands:
         create
             cluster         Create k8s cluster on the default cloud platform flag e.g. `--cloud-provider=gcloud`
             juypterhub(hub) Create JupyterHub within a k8s cluster leverages the JupyterHub Helm chart
@@ -25,5 +26,7 @@ jhubctl
             export-kubeconfig Exports config to ~/.kube/kubeconfig-<ClusterName>. Useful if working on a machine 
                                 that has aws configured but has not connected to k8s cluster before
         
-Usage:
-  jhubctl [flags] <command>
+    Resources:
+            cluster
+            jupyterhub(hub)
+            nodegroup(ng)
