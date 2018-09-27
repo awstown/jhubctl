@@ -7,12 +7,12 @@ import subprocess
 import logging
 from pathlib import Path
 
-from . import env
-from .utils import (
+from .provider import Provider, update_progress
+
+from ..utils import (
     get_config_path,
     get_kube_path,
     get_template_path,
-    get_deployment_path,
     read_config_file, 
     read_param_file,
 )
@@ -22,9 +22,26 @@ waiter = client.get_waiter('stack_create_complete')
 cf = boto3.resource('cloudformation')
 iam = boto3.client('iam')
 
+# Constants
+ROLE_TEMPLATE_URL = "https://amazon-eks.s3-us-west-2.amazonaws.com/cloudformation/2018-08-30/amazon-eks-service-role.yaml"
+VPC_TEMPLATE_URL = "https://amazon-eks.s3-us-west-2.amazonaws.com/cloudformation/2018-08-30/amazon-eks-vpc-sample.yaml"
+NODE_TEMPLATE_URL = "https://amazon-eks.s3-us-west-2.amazonaws.com/cloudformation/2018-08-30/amazon-eks-nodegroup.yaml"
+SPOT_TEMPLATE_URL = "https://raw.githubusercontent.com/townsenddw/k8s-eks-deploy/master/spot-nodes.yaml"
+
 
 class ResourceDoesNotExistError(Exception):
     """Resource does not exist."""
+
+
+def raise_if_does_not_exist(resource):
+    if does_resource_exist(resource) is False:
+        raise ResourceDoesNotExistError
+
+
+def get_stack_value(stack, key):
+    for output in stack.outputs:
+        if output['OutputKey'] == key:
+            return output['OutputValue']
 
 
 def does_resource_exist(resource):
@@ -39,17 +56,6 @@ def does_resource_exist(resource):
             raise e
 
 
-def raise_if_does_not_exist(resource):
-    if does_resource_exist(resource) is False:
-        raise ResourceDoesNotExistError
-
-
-def get_stack_value(stack, key):
-    for output in stack.outputs:
-        if output['OutputKey'] == key:
-            return output['OutputValue']
-
-
 def deploy_eks_role(role_name):
     """Create an EKS Role on AWS for Jupyterhub Deployments with Kubernetes.
 
@@ -61,7 +67,7 @@ def deploy_eks_role(role_name):
     Return
     ------
     role_arn : str
-    """ 
+    """
     # Deploy the role.
     try:
         logging.info(f"Checking to see if a {role_name} exists.\n")
@@ -71,12 +77,13 @@ def deploy_eks_role(role_name):
 
         logging.info(f"{role_name} found. No need to create a new one.\n")
     except ResourceDoesNotExistError:
-        logging.info(f"{role_name} not found. Creating a new role name {role_name}.\n")
+        logging.info(
+            f"{role_name} not found. Creating a new role name {role_name}.\n")
 
         # Create stack
         stack = cf.create_stack(
             StackName=f'{role_name}',
-            TemplateURL=env.ROLE_TEMPLATE_URL,
+            TemplateURL=ROLE_TEMPLATE_URL,
             Capabilities=[
                 'CAPABILITY_NAMED_IAM',
             ]
@@ -114,15 +121,17 @@ def deploy_vpc(vpc_name):
         stack = cf.Stack(f"{vpc_name}")
         raise_if_does_not_exist(stack)
 
-        logging.info(f"{vpc_name} already exists. No need to create a new one.")
+        logging.info(
+            f"{vpc_name} already exists. No need to create a new one.")
 
     except:
 
-        logging.info(f"{vpc_name} does not exist. Creating a new VPC named {vpc_name}.")
+        logging.info(
+            f"{vpc_name} does not exist. Creating a new VPC named {vpc_name}.")
 
         stack = cf.create_stack(
             StackName=f"{vpc_name}",
-            TemplateURL=env.VPC_TEMPLATE_URL,
+            TemplateURL=VPC_TEMPLATE_URL,
             Parameters=read_param_file("vpc.json"),
         )
         waiter.wait(StackName=stack.name)
@@ -138,7 +147,7 @@ def deploy_vpc(vpc_name):
     return security_groups, subnet_ids, vpc_ids
 
 
-def deploy_cluster(
+def deploy_eks_cluster(
     cluster_name,
     security_groups,
     subnet_ids,
@@ -156,13 +165,14 @@ def deploy_cluster(
     """
     try:
         logging.info(f"Checking if {cluster_name} already exists.")
-        
+
         # Get stack.
         stack = cf.Stack(f'{cluster_name}')
         waiter.wait(StackName=stack.name)
         raise_if_does_not_exist(stack)
 
-        logging.info(f"{cluster_name} already exists. No need to create a new one.")
+        logging.info(
+            f"{cluster_name} already exists. No need to create a new one.")
 
     except:
         logging.info(f"{cluster_name} does not exist. creating a new one.")
@@ -202,7 +212,6 @@ def deploy_cluster(
     return endpoint_url, ca_cert
 
 
-
 def deploy_ondemand_workers(
     workers_name,
     cluster_name,
@@ -238,14 +247,15 @@ def deploy_ondemand_workers(
         waiter.wait(StackName=stack.name)
         raise_if_does_not_exist(stack)
 
-        logging.info(f"{workers_name} already exists. No need to create a new one.")
+        logging.info(
+            f"{workers_name} already exists. No need to create a new one.")
 
     except:
 
         logging.info(f"{workers_name} not found. Creating new workers.")
         stack = cf.create_stack(
             StackName=f'{workers_name}',
-            TemplateURL=env.NODE_TEMPLATE_URL,
+            TemplateURL=NODE_TEMPLATE_URL,
             Parameters=[
                 {
                     "ParameterKey": "ClusterName",
@@ -318,7 +328,8 @@ def deploy_spot_instances(
         waiter.wait(StackName=stack.name)
         raise_if_does_not_exist(stack)
 
-        logging.info(f"{spot_instances_name} already exists. No need to create new ones.")
+        logging.info(
+            f"{spot_instances_name} already exists. No need to create new ones.")
 
     except:
 
@@ -355,7 +366,6 @@ def deploy_spot_instances(
         logging.info(f"{spot_instances_name} successfully created.")
 
 
-
 def deploy_utilities_stack(
     utilities_name,
     cluster_name,
@@ -371,7 +381,7 @@ def deploy_utilities_stack(
 
     except:
         stack = cf.create_stack(
-            StackName=utilities_name, 
+            StackName=utilities_name,
             TemplateBody=read_config_file("utilities.yaml"),
             Parameters=[
                 {
@@ -391,49 +401,149 @@ def deploy_utilities_stack(
     return efs_id
 
 
-def write_auth_cm(node_arn):
+class AWS_EKS(Provider):
+    """AWS EKS Cluster.
+
+    Parameters
+    ----------
+    name : str
+        Name of the cluster.
     """
-    """
-    # Get admins
-    admins = iam.get_group(GroupName="admin")["Users"]
+    def __init__(self, name):
+        super(AWS_EKS, self).__init__(name)
 
-    ## Apply ARN of instance role of worker nodes and apply to cluster
-    template_loader = jinja2.FileSystemLoader(searchpath=TEMPLATE_DIR)
-    template_env = jinja2.Environment(loader=template_loader)
-    TEMPLATE_FILE = "aws-auth-cm.yaml.template"
+        self.role_name = f"{name}-role"
+        self.vpc_name = f"{name}-vpc"
+        self.workers_name = f"{name}-ondemand-workers"
+        self.spot_instances_name = f"{name}-spot-nodes"
+        self.utilities_name = f"{name}-utilities"
 
-    template = template_env.get_template(TEMPLATE_FILE)
-    output_text = template.render(arn=node_arn, users=admins)
+        self._security_groups = None
+        self._subnet_ids = None
+        self._vpc_ids = None
+        self._endpoint_url = None
+        self._ca_cert = None
+        self._node_arn = None
+        self._node_instance_profile = None
+        self._node_instance_role = None
+        self._node_security_group = None
+        self._efs_ids = None
 
-    auth_fname = 'aws-auth-cm.yaml'
-    auth_path = os.path.join(get_deployment_path(), authfname)
-    with open(auth_fname, 'w') as ofile:
-        ofile.writelines(output_text)
 
-    return admins, auth_fname
+    # ------ STill need to write protect for these attributes ------
+    @property
+    def security_groups(self):
+        return self._security_groups
 
+    @property
+    def subnet_ids(self):
+        return self._subnet_ids
 
-def write_efs_profivisioner(
-    cluster_name,
-    efs_id
-    ):
-    """
-    """
-    ## Apply fs-id, region, and clusterName to efs-provisioner
-    template_loader = jinja2.FileSystemLoader(searchpath=TEMPLATE_DIR)
-    template_env = jinja2.Environment(loader=template_loader)
-    template_file = "efs-provisioner.yaml.template"
-    template = template_env.get_template(template_file)
+    @property
+    def vpc_ids(self):
+        return self._vpc_ids
 
-    # Fill template
-    output_text = template.render(
-        clusterName=cluster_name,
-        region=boto3.Session().region_name,
-        efsSystemId=efs_id)
+    @property
+    def endpoint_url(self):
+        return self._endpoint_url
 
-    # Write to config directory.
-    fname = 'efs-provisioner.yaml'
-    path = os.path.join(get_deployment_path(), fname)
-    with open(path, 'w') as ofile:
-        ofile.writelines(output_text)
+    @property
+    def ca_cert(self):
+        return self._ca_cert
 
+    @property
+    def node_arn(self):
+        return self._node_arn
+
+    @property
+    def node_instance_profile(self):
+        return self._node_instance_profile
+
+    @property
+    def node_instance_role(self):
+        return self._node_instance_role
+
+    @property
+    def node_security_group(self):
+        return self._node_security_group
+
+    @property
+    def efs_ids(self):
+        return self._efs_ids
+
+    def deploy_cluster(self, progressbar=True):
+        """Deploy an AWS EKS instance configured for JupyterHub deployments.
+        """
+        if progressbar:
+            self.reset_progressbar(length=6)
+
+        # 1. Create role.
+        self.deploy_eks_role()
+
+        # 2. Create VPC.
+        self.deploy_vpc()
+
+        # 3. Create cluster
+        self.deploy_eks_cluster()
+
+        # 4. Create workers.
+        self.deploy_onedemand_workers()
+
+        # 5. Create spot instances
+        self.deploy_spot_instances()
+
+        # 6. Setup utilities.
+        self.deploy_utilities_stack()
+
+    @update_progress
+    def deploy_eks_role(self):
+        deploy_eks_role(self.role_name)
+
+    @update_progress
+    def deploy_vpc(self):
+        # 2. Create VPC.
+        (self._security_groups,
+         self._subnet_ids,
+         self._vpc_ids) = deploy_vpc(self.vpc_name)
+
+    @update_progress
+    def deploy_eks_cluster(self):
+        self._endpoint_url, self._ca_cert = deploy_eks_cluster(
+            cluster_name=self.cluster_name,
+            security_groups=self.security_groups,
+            subnet_ids=self.subnet_ids,
+            vpc_ids=self.vpc_ids
+        )
+
+    @update_progress
+    def deploy_onedemand_workers(self):
+        (self._node_arn,
+         self._node_instance_profile,
+         self._node_instance_role,
+         self._node_security_group) = deploy_ondemand_workers(
+            self.workers_name,
+            self.cluster_name,
+            self.security_groups,
+            self.subnet_ids,
+            self.vpc_ids
+        )
+
+    @update_progress
+    def deploy_spot_instances(self):
+        deploy_spot_instances(
+            self.spot_instances_name,
+            self.cluster_name,
+            self.subnet_ids,
+            self.node_instance_profile,
+            self.node_instance_role,
+            self.node_security_group
+        )
+
+    @update_progress
+    def deploy_utilities_stack(self):
+        self._efs_id = deploy_utilities_stack(
+            self.utilities_name,
+            self.cluster_name,
+            self.subnet_ids,
+            self.node_security_group
+        )

@@ -3,7 +3,7 @@ import click
 import logging
 import click_log
 
-from . import aws
+from . import providers
 from . import kube
 from . import hub
 
@@ -12,7 +12,8 @@ from .teardown import (
     teardown_jupyterhub_vpc,
     teardown_jupyterhub_cluster,
     teardown_ondemand_workers,
-    teardown_spot_instances
+    teardown_spot_instances,
+    teardown_utilities
 )
 
 # Configure logging
@@ -24,100 +25,33 @@ click_log.basic_config(logger)
 def cli():
     """jhubctl controls multiple Jupyterhub/EKS clusters."""
 
+
 @cli.group()
 @click_log.simple_verbosity_option(logger)
 def create():
     """Create an EKS Jupyterhub cluster."""
 
+
 @create.command("cluster")
 @click.argument("cluster_name")
-def create_cluster(cluster_name):
-    """Create an Jupyterhub/EKS cluster.
-    """
-
-    # Deploy the role.
-    role_name = f"{cluster_name}-role"
-    vpc_name = f"{cluster_name}-vpc"
-    cluster_name = f"{cluster_name}-cluster"
-    workers_name = f"{cluster_name}-ondemand-workers"
-    spot_instances_name = f"{cluster_name}-spot-nodes"
-    utilities_name = f"{cluster_name}-utilities"
+@click.option("--provider", default="AWS_EKS", help="Cloud provider to use.")
+@click_log.simple_verbosity_option(logger)
+def create_cluster(cluster_name, provider):
+    """Create an Jupyterhub/EKS cluster."""
+    # Load provider class.
+    Provider = getattr(providers, provider)
+    # Deploy cluster on provider.
+    provider = Provider(cluster_name)
+    provider.deploy_cluster()
 
 
-    with click.progressbar(length=9, label=f"Creating {cluster_name}...") as bar:
-
-        # 1. Create role.
-        role = aws.deploy_eks_role(role_name)
-        bar.update(1)
-
-        # 2. Create VPC.
-        security_groups, subnet_ids, vpc_ids = aws.deploy_vpc(vpc_name) 
-        bar.update(2)
-
-        # 3. Create cluster
-        endpoint_url, ca_cert = aws.deploy_cluster(
-            cluster_name=cluster_name,
-            security_groups=security_groups,
-            subnet_ids=subnet_ids,
-            vpc_ids=vpc_ids
-        )
-        bar.update(3)
-
-        # 4. Create workers.
-        node_arn, node_instance_profile, node_instance_role, node_security_group = aws.deploy_ondemand_workers(
-            workers_name,
-            cluster_name,
-            security_groups,
-            subnet_ids,
-            vpc_ids
-        )
-        bar.update(4)
-
-        # 5. Create spot instances
-        aws.deploy_spot_instances(
-            spot_instances_name,
-            cluster_name,
-            subnet_ids,
-            node_instance_profile,
-            node_instance_role,
-            node_security_group
-        )
-        bar.update(5)
-
-        # 6. Setup utilities.
-        efs_id = aws.deploy_utilities_stack(
-            utilities_name,
-            cluster_name,
-            subnet_ids,
-            node_security_group
-        )
-        bar.update(6)
-
-        # Generate aws-auth-cm.yaml and apply to cluster.
-        aws.write_auth_cm(node_arn)
-
-        # 
-        aws.write_efs_profivisioner(
-            cluster_name,
-            efs_id
-        )
-        bar.update(7)
-
-        # Configure Kubectl
-        kubectl_config_path = kube.write_kube_config(
-            cluster_name,
-            endpoint_url,
-            ca_cert
-        )
-
-        os.environ["KUBECONFIG"] = kubectl_config_path
-
-        kube.deploy_kube()
-        bar.update(8)
-
-        hub.deploy_jupyterhub()
-        bar.update(9)
-
+@create.command("hub")
+@click.argument("hub_name")
+@click.option("--cluster", help="Cluster to use. Otherwise, will use the default kubectl env.")
+@click_log.simple_verbosity_option(logger)
+def create_hub(hub_name, cluster):
+    """"""
+    hub.deploy_jupyterhub()
 
 
 @cli.group()
@@ -160,6 +94,9 @@ def delete_cluster(cluster_name):
         teardown_spot_instances(spot_instances_name)
         bar.update(5)
 
+        # 5. Teardown spot instances
+        teardown_utilities(utilities_name)
+        bar.update(6)
 
 
 
@@ -183,4 +120,3 @@ def config():
 def export_kubeconfig(cluster_name):
     """Exports kubeconfig for cluster_name to ~/.kube/kubeconfig-<cluster_name>
     """
-
