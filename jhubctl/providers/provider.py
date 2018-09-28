@@ -33,4 +33,9 @@ class Provider(object):
 
     def reset_progressbar(self, length, label="Starting cluster:"):
         self.bar = click.progressbar(length=length, label=label)
-        self.bar.update()
+        
+    def get_auth_yaml(self):
+        raise Exception("Must be implemented in a subclass.")
+
+    def get_storage_yaml(self):
+        raise Exception("Must be implemented in a subclass.")

@@ -7,21 +7,10 @@ from .utils import get_template_path, get_config_path
 
 TEMPLATE_DIR = get_template_path()
 
-def kubectl(*args, **kwargs):
-    """Construct a kubectl subprocess."""
-    return subprocess.check_call(('kubectl',) + args, **kwargs)
-
-
-def helm(*args, **kwargs):
-    """Construct a helm subprocess."""
-    return subprocess.check_call(('helm',) + args, **kwargs)
-
-
 def write_kube_config(
-        cluster_name,
-        endpoint_url,
-        ca_cert
-    ):
+    cluster_name,
+    endpoint_url,
+    ca_cert):
     """Write a kubectl config file to ~/.kube"""
     # Load kubeconfig template.
     template_loader = jinja2.FileSystemLoader(searchpath=TEMPLATE_DIR)
@@ -44,82 +33,77 @@ def write_kube_config(
     return config_path
 
 
-def write_auth_cm(node_arn, admins):
+def kubectl(*args, config_yaml=None, **options):
+    """Runs a kubectl command and returns the stdout as a string
     """
+    line = ["kubectl"]
+    for key, value in options.items():
+        if len(key) == 1:
+            lines += [f"-{key}", value]
+        else:
+            lines += [f"--{key}", value]
+
+    # Add yaml string as input to command
+    if config_yaml is not None:
+        line = [config_yaml, "|"] + line + ["-f", "-"]
+
+    output = subprocess.run(line)
+    return output.stdout.decode('utf-8')
+
+
+def helm(*args, config_yaml=None, **options):
+    """Runs a helm command and returns the stdout as a string
     """
-    # Get admins
-    admins = iam.get_group(GroupName="admin")["Users"]
+    line = ["helm"]
+    for key, value in options.items():
+        if len(key) == 1:
+            lines += [f"-{key}", value]
+        else:
+            lines += [f"--{key}", value]
 
-    ## Apply ARN of instance role of worker nodes and apply to cluster
-    template_loader = jinja2.FileSystemLoader(searchpath=TEMPLATE_DIR)
-    template_env = jinja2.Environment(loader=template_loader)
-    TEMPLATE_FILE = "aws-auth-cm.yaml.template"
+    # Add yaml string as input to command
+    if config_yaml is not None:
+        line = [config_yaml, "|"] + line + ["-f", "-"]
 
-    template = template_env.get_template(TEMPLATE_FILE)
-    output_text = template.render(arn=node_arn, users=admins)
-
-    return output_text
-
-    
-def write_efs_profivisioner(
-    cluster_name,
-    efs_id
-    ):
-    """
-    """
-    ## Apply fs-id, region, and clusterName to efs-provisioner
-    template_loader = jinja2.FileSystemLoader(searchpath=TEMPLATE_DIR)
-    template_env = jinja2.Environment(loader=template_loader)
-    template_file = "efs-provisioner.yaml.template"
-    template = template_env.get_template(template_file)
-
-    # Fill template
-    output_text = template.render(
-        clusterName=cluster_name,
-        region=boto3.Session().region_name,
-        efsSystemId=efs_id)
-
-    return output_text
+    output = subprocess.run(line)
+    return output.stdout.decode('utf-8')
 
 
-def deploy_kube(
-    cluster_name,
-    node_arn,
-    admins,
-    efs_id
-    ):
-    """Use kubectl to deploy jupyterhub.
-    """
-    # Set the KUBECONFIG for this cluster
-    kube_config_path = f'{Path.home()}/.kube/kubeconfig-{cluster_name}'
-    os.environ["KUBECONFIG"] = kube_config_path
+class KubernetesCluster(object):
 
-    # apply aws authentication configuration map
-    authentication_map = write_auth_cm(node_arn, admins)
-    subprocess.check_call([authentication_map, "|", "kubectl", "apply", "-f", "-"])
+    def __init__(self, kubectl_config):
+        self.kubectl_config = kubectl_config
 
-    # Create storage class.
-    try:
-        config_file = os.path.join(get_config_path(), "storageclass.yaml")
-        kubectl("apply", "-f", config_file)
-    except:
-        kubectl("delete", "storageclass", "gp2")
+    def set_auth(self, auth_yaml):
+        """Set the auth_group for Kubernetes cluster from the cluster provider."""
+        kubectl('apply', config_yaml=auth_yaml)
 
-    try:
-        kubectl('--namespace', 'kube-system',
-                'create', 'serviceaccount', 'tiller')
-    except:
-        kubectl('-n', 'kube-system', 'get', 'serviceaccount', 'tiller')
+    def set_storage(self, storage_yaml):
+        """Set the storage class for the Kubernetes cluster."""
+        kubectl('apply', config_yaml=storage_yaml)
 
-    try:
-        kubectl('create', 'clusterrolebinding', 'tiller',
-                '--clusterrole=cluster-admin', '--serviceaccount=kube-system:tiller')
-    except:
-        kubectl('get', 'clusterrolebinding', 'tiller')
+    def setup_helm(self):
+        # Set up a ServiceAccount for tiller
+        kubectl('create', 'serviceaccount', 'tiller', namespace='kube-system')
 
-    # Inititalize Helm/Tiller for the cluster
-    helm('init', '--service-account', 'tiller')
+        # Give the service account full permissions to manage the cluster.
+        kubectl('create', 'clusterrolebinding', 'tiller', 
+            clusterrole='cluster-admin', 
+            serviceaccount='kube-system:tiller'
+        )
+        # Initialize helm and tiller.
+        helm('init', serviceaccount='tiller')
 
-    # apply aws authentication configuration map
-    subprocess.check_call(
-        [authentication_map, '|', 'kubectl', '-n', 'kube-system', 'apply', '-f', 'efs-provisioner.yaml'])
+        # Secure helm
+        kubectl('patch', 'deployment', 'tiller-deploy', 
+            namespace='kube-system', 
+            type='json',
+            patch='[{"op": "add", "path": "/spec/template/spec/containers/0/command",'
+                  '"value": ["/tiller", "--listen=localhost:44134"]}]')
+
+    def export_kubectl(self):
+        """"""
+
+    @property
+    def context(self):
+        return kubectl("config", "get-context")

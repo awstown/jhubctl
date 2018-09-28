@@ -49,14 +49,6 @@ def read_param_file(fname):
     return data
 
 
-<<<<<<< HEAD
-def read_deployment_file(cluster_name, fname):
-    """Read a file from the deployment directory (in ~/.kube/{cluster_name})."""
-    fpath = os.path.join(get_deployment_path(cluster_name), fname)
-    with open(fname, "r") as f:
-        data = f.read()
-    return data
-=======
 def fill_template(template_name, **parameters):
     """Use jinjga2 to fill in template with given parameters.
     
@@ -81,7 +73,7 @@ def fill_template(template_name, **parameters):
     template_env = jinja2.Environment(loader=template_loader)
 
     template = template_env.get_template(template_name)
-    output_text = template.render(**kwargs)
+    output_text = template.render(**parameters)
 
     return output_text
 
@@ -133,4 +125,3 @@ def fill_template(template_name, **parameters):
 #     with open(fname, "r") as f:
 #         data = f.read()
 #     return data
->>>>>>> abstract out cloud providers

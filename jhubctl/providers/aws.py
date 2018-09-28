@@ -15,6 +15,7 @@ from ..utils import (
     get_template_path,
     read_config_file, 
     read_param_file,
+    fill_template
 )
 
 client = boto3.client('cloudformation')
@@ -54,6 +55,8 @@ def does_resource_exist(resource):
         else:
             raise e
 
+
+def create_stack():
 
 def deploy_eks_role(role_name):
     """Create an EKS Role on AWS for Jupyterhub Deployments with Kubernetes.
@@ -412,7 +415,7 @@ def teardown_stack(stack_name):
         )
         logging.info(f"{stack_name} deleted.\n")
 
-    except aws.ResourceDoesNotExistError:
+    except ResourceDoesNotExistError:
         logging.info(f"{stack_name} does not exist.\n")
 
 
@@ -443,7 +446,7 @@ class AWS_EKS(Provider):
         self._node_instance_role = None
         self._node_security_group = None
         self._efs_ids = None
-
+        self._admins = None
 
     # ------ STill need to write protect for these attributes ------
     @property
@@ -485,6 +488,13 @@ class AWS_EKS(Provider):
     @property
     def efs_ids(self):
         return self._efs_ids
+
+    @property
+    def admins(self):
+        """Admins of the cluster."""
+        if self._admins is None:
+            self._admins = iam.get_group(GroupName="admin")["Users"]
+        return self._admins
 
     def deploy_cluster(self, progressbar=True):
         """Deploy an AWS EKS instance configured for JupyterHub deployments.
@@ -574,7 +584,22 @@ class AWS_EKS(Provider):
         self.teardown_stack(self.vpc_name)
         self.teardown_stack(self.role_name)
 
-
     @update_progress
     def teardown_stack(self, stack_name):
         teardown_stack(stack_name)
+
+    def get_auth_yaml(self):
+        """"""
+        return fill_template(
+            "aws-auth-cm.yaml.template",
+            arn=self.node_arn,
+            users=self.admins
+        )
+    def get_storage_yaml(self):
+        """"""
+        return fill_template(
+            "efs-provisioner.yaml.template",
+            clusterName=self.cluster_name,
+            region=boto3.Session().region_name,
+            efsSystemId=self.efs_id
+        )

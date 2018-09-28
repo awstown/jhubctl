@@ -54,8 +54,7 @@ def delete():
 @delete.command("cluster")
 @click.argument("cluster_name")
 @click.option("--provider", default="AWS_EKS", help="Cloud provider to use.")
-def delete_cluster(cluster_name):
-    """"""
+def delete_cluster(cluster_name, provider):
     """Create an Jupyterhub/EKS cluster."""
     # Load provider class.
     Provider = getattr(providers, provider)
