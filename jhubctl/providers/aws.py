@@ -18,10 +18,11 @@ from ..utils import (
     fill_template
 )
 
-client = boto3.client('cloudformation')
-waiter = client.get_waiter('stack_create_complete')
-cf = boto3.resource('cloudformation')
-iam = boto3.client('iam')
+CLIENT = boto3.client('cloudformation')
+WAITER = CLIENT.get_waiter('stack_create_complete')
+CLOUDFORMATION = boto3.resource('cloudformation')
+IAM = boto3.client('iam')
+EKS = boto3.client('eks')
 
 # Constants
 ROLE_TEMPLATE_URL = "https://amazon-eks.s3-us-west-2.amazonaws.com/cloudformation/2018-08-30/amazon-eks-service-role.yaml"
@@ -38,12 +39,6 @@ def raise_if_does_not_exist(resource):
         raise ResourceDoesNotExistError
 
 
-def get_stack_value(stack, key):
-    for output in stack.outputs:
-        if output['OutputKey'] == key:
-            return output['OutputValue']
-
-
 def does_resource_exist(resource):
     """Use boto3 to check if a resource exists."""
     try:
@@ -56,7 +51,23 @@ def does_resource_exist(resource):
             raise e
 
 
-def create_stack():
+def get_stack(name):
+    """Get stack from AWS's cloud formation."""
+    try:
+        stack = CLOUDFORMATION.Stack(f"{name}")
+        WAITER.wait(StackName=stack.name)
+        raise_if_does_not_exist(stack)
+        return stack
+    except ResourceDoesNotExistError:
+        raise ResourceDoesNotExistError("This stack doesn't exist yet.")
+
+
+def get_stack_value(stack, key):
+    """Get metadata value from a cloudformation stack."""
+    for output in stack.outputs:
+        if output['OutputKey'] == key:
+            return output['OutputValue']
+
 
 def deploy_eks_role(role_name):
     """Create an EKS Role on AWS for Jupyterhub Deployments with Kubernetes.
@@ -65,25 +76,23 @@ def deploy_eks_role(role_name):
     ----------
     name : str 
         Name an EKS role.
-
-    Return
-    ------
-    role_arn : str
     """
     # Deploy the role.
     try:
         logging.info(f"Checking to see if a {role_name} exists.\n")
 
-        stack = cf.Stack(f"{role_name}")
+        stack = CLOUDFORMATION.Stack(f"{role_name}")
         raise_if_does_not_exist(stack)
 
         logging.info(f"{role_name} found. No need to create a new one.\n")
+
     except ResourceDoesNotExistError:
+        
         logging.info(
             f"{role_name} not found. Creating a new role name {role_name}.\n")
 
         # Create stack
-        stack = cf.create_stack(
+        stack = CLOUDFORMATION.create_stack(
             StackName=f'{role_name}',
             TemplateURL=ROLE_TEMPLATE_URL,
             Capabilities=[
@@ -91,14 +100,10 @@ def deploy_eks_role(role_name):
             ]
         )
         # Wait for role to be created.
-        waiter.wait(StackName=stack.name)
+        WAITER.wait(StackName=stack.name)
         raise_if_does_not_exist(stack)
 
         logging.info(f"{role_name} succesfully created.")
-
-    role_arn = get_stack_value(stack, "RoleArn")
-
-    return role_arn
 
 
 def deploy_vpc(vpc_name):
@@ -108,19 +113,11 @@ def deploy_vpc(vpc_name):
     ---------
     name : str 
         Name assigned to virtual private cloud (VPC).
-
-    Returns
-    -------
-    security_groups: 
-
-    subnet_ids : 
-
-    vpc_ids : 
     """
     try:
         logging.info(f"Checking if {vpc_name} already exists.")
 
-        stack = cf.Stack(f"{vpc_name}")
+        stack = CLOUDFORMATION.Stack(f"{vpc_name}")
         raise_if_does_not_exist(stack)
 
         logging.info(
@@ -131,22 +128,15 @@ def deploy_vpc(vpc_name):
         logging.info(
             f"{vpc_name} does not exist. Creating a new VPC named {vpc_name}.")
 
-        stack = cf.create_stack(
+        stack = CLOUDFORMATION.create_stack(
             StackName=f"{vpc_name}",
             TemplateURL=VPC_TEMPLATE_URL,
             Parameters=read_param_file("vpc.json"),
         )
-        waiter.wait(StackName=stack.name)
+        WAITER.wait(StackName=stack.name)
         raise_if_does_not_exist(stack)
 
         logging.info(f"{vpc_name} successfully created")
-
-    # Rip out necessary data for moving forward.
-    security_groups = get_stack_value(stack, 'SecurityGroups')
-    subnet_ids = get_stack_value(stack, 'SubnetIds')
-    vpc_ids = get_stack_value(stack, 'VpcId')
-
-    return security_groups, subnet_ids, vpc_ids
 
 
 def deploy_eks_cluster(
@@ -160,17 +150,13 @@ def deploy_eks_cluster(
     ----------
     name : str
         Name of cluster.
-
-    Returns
-    -------
-    
     """
     try:
         logging.info(f"Checking if {cluster_name} already exists.")
 
         # Get stack.
-        stack = cf.Stack(f'{cluster_name}')
-        waiter.wait(StackName=stack.name)
+        stack = CLOUDFORMATION.Stack(f'{cluster_name}')
+        WAITER.wait(StackName=stack.name)
         raise_if_does_not_exist(stack)
 
         logging.info(
@@ -180,7 +166,7 @@ def deploy_eks_cluster(
         logging.info(f"{cluster_name} does not exist. creating a new one.")
 
         # Create a new stack.
-        stack = cf.create_stack(
+        stack = CLOUDFORMATION.create_stack(
             StackName=f'{cluster_name}',
             TemplateBody=read_config_file("cluster.yaml"),
             Parameters=[
@@ -198,20 +184,10 @@ def deploy_eks_cluster(
                 },
             ]
         )
-        waiter.wait(StackName=stack.name)
+        WAITER.wait(StackName=stack.name)
         raise_if_does_not_exist(stack)
 
         logging.info(f"{cluster_name} successfully created")
-
-    # Get response from eks.
-    client = boto3.client('eks')
-    response = client.describe_cluster(
-        name=cluster_name
-    )
-    endpoint_url = response['cluster']['endpoint']
-    ca_cert = response['cluster']['certificateAuthority']['data']
-
-    return endpoint_url, ca_cert
 
 
 def deploy_ondemand_workers(
@@ -231,22 +207,12 @@ def deploy_ondemand_workers(
     subnet_ids : 
 
     vpc_ids : 
-
-    Returns
-    -------
-    node_arn : 
-
-    node_instance_profile : 
-
-    node_instance_role :
-
-    node_security_group : 
     """
     try:
         logging.info(f"Checking if {workers_name} already exists.")
 
-        stack = cf.Stack(f'{workers_name}')
-        waiter.wait(StackName=stack.name)
+        stack = CLOUDFORMATION.Stack(f'{workers_name}')
+        WAITER.wait(StackName=stack.name)
         raise_if_does_not_exist(stack)
 
         logging.info(
@@ -255,7 +221,7 @@ def deploy_ondemand_workers(
     except:
 
         logging.info(f"{workers_name} not found. Creating new workers.")
-        stack = cf.create_stack(
+        stack = CLOUDFORMATION.create_stack(
             StackName=f'{workers_name}',
             TemplateURL=NODE_TEMPLATE_URL,
             Parameters=[
@@ -280,25 +246,10 @@ def deploy_ondemand_workers(
                 'CAPABILITY_IAM'
             ]
         )
-        waiter.wait(StackName=stack.name)
+        WAITER.wait(StackName=stack.name)
         raise_if_does_not_exist(stack)
 
         logging.info(f"{workers_name} successfully created")
-
-    node_arn = get_stack_value(stack, 'NodeInstanceRole')
-    node_instance_profile = stack.Resource(
-        'NodeInstanceProfile').physical_resource_id
-    node_instance_role = stack.Resource(
-        'NodeInstanceRole').physical_resource_id
-    node_security_group = stack.Resource(
-        'NodeSecurityGroup').physical_resource_id
-
-    return (
-        node_arn,
-        node_instance_profile,
-        node_instance_role,
-        node_security_group
-    )
 
 
 def deploy_spot_instances(
@@ -320,14 +271,11 @@ def deploy_spot_instances(
     subnet_ids : 
 
     vpc_ids : 
-
-    Returns
-    -------
     """
     try:
         logging.info(f"Checking if {spot_instances_name} already exists.")
-        stack = cf.Stack(f'{spot_instances_name}')
-        waiter.wait(StackName=stack.name)
+        stack = CLOUDFORMATION.Stack(f'{spot_instances_name}')
+        WAITER.wait(StackName=stack.name)
         raise_if_does_not_exist(stack)
 
         logging.info(
@@ -336,7 +284,7 @@ def deploy_spot_instances(
     except:
 
         logging.info(f"{spot_instances_name} not found. Creating new.")
-        stack = cf.create_stack(
+        stack = CLOUDFORMATION.create_stack(
             StackName=f'{spot_instances_name}',
             TemplateBody=read_config_file("spot-nodes.yaml"),
             Parameters=[
@@ -362,7 +310,7 @@ def deploy_spot_instances(
                 },
             ],
         )
-        waiter.wait(StackName=stack.name)
+        WAITER.wait(StackName=stack.name)
         raise_if_does_not_exist(stack)
 
         logging.info(f"{spot_instances_name} successfully created.")
@@ -377,12 +325,12 @@ def deploy_utilities_stack(
     """
     """
     try:
-        stack = cf.Stack(utilities_name)
-        waiter.wait(StackName=stack.name)
+        stack = CLOUDFORMATION.Stack(utilities_name)
+        WAITER.wait(StackName=stack.name)
         raise_if_does_not_exist(stack)
 
     except:
-        stack = cf.create_stack(
+        stack = CLOUDFORMATION.create_stack(
             StackName=utilities_name,
             TemplateBody=read_config_file("utilities.yaml"),
             Parameters=[
@@ -396,11 +344,8 @@ def deploy_utilities_stack(
                 }
             ]
         )
-        waiter.wait(StackName=stack.name)
+        WAITER.wait(StackName=stack.name)
         raise_if_does_not_exist(stack)
-
-    efs_id = get_stack_value(stack, 'efsId')
-    return efs_id
 
 
 def teardown_stack(stack_name):
@@ -408,9 +353,9 @@ def teardown_stack(stack_name):
     try:
         logging.info(f"Checking that {stack_name} exists.\n")
 
-        stack = cf.Stack(f"{stack_name}")
+        stack = CLOUDFORMATION.Stack(f"{stack_name}")
         raise_if_does_not_exist(stack)
-        response = client.delete_stack(
+        response = CLIENT.delete_stack(
             StackName=stack_name
         )
         logging.info(f"{stack_name} deleted.\n")
@@ -436,65 +381,85 @@ class AWS_EKS(Provider):
         self.spot_instances_name = f"{name}-spot-nodes"
         self.utilities_name = f"{name}-utilities"
 
-        self._security_groups = None
-        self._subnet_ids = None
-        self._vpc_ids = None
-        self._endpoint_url = None
-        self._ca_cert = None
-        self._node_arn = None
-        self._node_instance_profile = None
-        self._node_instance_role = None
-        self._node_security_group = None
-        self._efs_ids = None
-        self._admins = None
-
-    # ------ STill need to write protect for these attributes ------
+    # ---------- Attributes -------------
+    # 
+    # -----------------------------------    
+     
     @property
     def security_groups(self):
-        return self._security_groups
+        return get_stack_value(self.vpc_stack, "SecurityGroups")
 
     @property
     def subnet_ids(self):
-        return self._subnet_ids
+        return get_stack_value(self.vpc_stack, "SubnetIds")
 
     @property
     def vpc_ids(self):
-        return self._vpc_ids
+        return get_stack_value(self.vpc_stack, "VpcID")
 
     @property
     def endpoint_url(self):
-        return self._endpoint_url
+        response = EKS.describe_cluster(name=self.cluster_name)
+        return response['cluster']['endpoint']
 
     @property
     def ca_cert(self):
-        return self._ca_cert
+        response = EKS.describe_cluster(name=self.cluster_name)
+        return response['cluster']['certificateAuthority']['data']
 
     @property
     def node_arn(self):
-        return self._node_arn
+        return get_stack_value(self.workers_stack, "NodeInstanceRole")
 
     @property
     def node_instance_profile(self):
-        return self._node_instance_profile
+        return self.workers_stack.Resource('NodeInstanceProfile').physical_resource_id
 
     @property
     def node_instance_role(self):
-        return self._node_instance_role
+        return self.workers_stack.Resource('NodeInstanceRole').physical_resource_id
 
     @property
     def node_security_group(self):
-        return self._node_security_group
+        return self.workers_stack.Resource('NodeSecurityGroup').physical_resource_id
 
     @property
-    def efs_ids(self):
-        return self._efs_ids
+    def efs_id(self):
+        return get_stack_value(self.utilities_stack, 'efsId')
 
     @property
     def admins(self):
         """Admins of the cluster."""
-        if self._admins is None:
-            self._admins = iam.get_group(GroupName="admin")["Users"]
-        return self._admins
+        return IAM.get_group(GroupName="admin")["Users"]
+
+    # ---------- Stacks -----------------
+    # Cloud formation stacks.
+    # -----------------------------------
+
+    @property
+    def role_stack(self):
+        return get_stack(self.role_name)
+
+    @property
+    def vpc_stack(self):
+        return get_stack(self.vpc_name)
+
+    @property
+    def workers_stack(self):
+        return get_stack(self.workers_name)
+
+    @property
+    def spot_instances_stack(self):
+        return get_stack(self.spot_instances_name)
+
+    @property
+    def utilities_stack(self):
+        return get_stack(self.utilities_name)
+
+    # ---------- Methods -----------------
+    # 
+    # -----------------------------------
+
 
     def deploy_cluster(self, progressbar=True):
         """Deploy an AWS EKS instance configured for JupyterHub deployments.
@@ -527,13 +492,11 @@ class AWS_EKS(Provider):
     @update_progress
     def deploy_vpc(self):
         # 2. Create VPC.
-        (self._security_groups,
-         self._subnet_ids,
-         self._vpc_ids) = deploy_vpc(self.vpc_name)
+        deploy_vpc(self.vpc_name)
 
     @update_progress
     def deploy_eks_cluster(self):
-        self._endpoint_url, self._ca_cert = deploy_eks_cluster(
+        deploy_eks_cluster(
             cluster_name=self.cluster_name,
             security_groups=self.security_groups,
             subnet_ids=self.subnet_ids,
@@ -542,10 +505,7 @@ class AWS_EKS(Provider):
 
     @update_progress
     def deploy_onedemand_workers(self):
-        (self._node_arn,
-         self._node_instance_profile,
-         self._node_instance_role,
-         self._node_security_group) = deploy_ondemand_workers(
+        deploy_ondemand_workers(
             self.workers_name,
             self.cluster_name,
             self.security_groups,
@@ -566,7 +526,7 @@ class AWS_EKS(Provider):
 
     @update_progress
     def deploy_utilities_stack(self):
-        self._efs_id = deploy_utilities_stack(
+        deploy_utilities_stack(
             self.utilities_name,
             self.cluster_name,
             self.subnet_ids,

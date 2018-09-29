@@ -1,18 +1,16 @@
-
+from .kube import KubernetesCluster
 
 class Deployment(object):
     """Deployment class.
     """
-    def __init__(self, provider, kubernetes, hub={}):
-        self.provider = provider
-        self.kubernetes = kubernetes
-        self.hubs = hubs
-    
-    def get_hubs(self):
+    def __init__(self, name, ProviderClass):
+        self.provider = ProviderClass(name)
 
 
-    def deploy(self):
-        """"""
-        self.provider.deploy_cluster()
-        self.provider.
-        self.kubernetes.setup()
+    def deploy_cluster(self):
+
+
+    def setup_kubernetes():
+        self.kubernetes.setup(
+            self.provider.
+        )

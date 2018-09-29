@@ -42,7 +42,6 @@ def create_cluster(cluster_name, provider):
 @click_log.simple_verbosity_option(logger)
 def create_hub(hub_name, cluster):
     """"""
-    hub.deploy_jupyterhub()
 
 
 @cli.group()

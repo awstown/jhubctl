@@ -6,7 +6,6 @@ def deploy_hub(cluster_name):
     """"""
     # Get and random hex string.
     hex_str = subprocess.getoutput("openssl rand -hex 32")
-
     hub_yaml = f'proxy:\n  secretToken: "{hex_str}"'
 
 
