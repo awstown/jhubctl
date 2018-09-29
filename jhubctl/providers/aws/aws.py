@@ -7,12 +7,9 @@ import subprocess
 import logging
 from pathlib import Path
 
-from .provider import Provider, update_progress
+from ..provider import Provider, update_progress
 
-from ..utils import (
-    get_config_path,
-    get_kube_path,
-    get_template_path,
+from ...utils import (
     read_config_file, 
     read_param_file,
     fill_template
@@ -131,7 +128,7 @@ def deploy_vpc(vpc_name):
         stack = CLOUDFORMATION.create_stack(
             StackName=f"{vpc_name}",
             TemplateURL=VPC_TEMPLATE_URL,
-            Parameters=read_param_file("vpc.json"),
+            Parameters=read_param_file("aws", "vpc.json"),
         )
         WAITER.wait(StackName=stack.name)
         raise_if_does_not_exist(stack)
@@ -168,7 +165,7 @@ def deploy_eks_cluster(
         # Create a new stack.
         stack = CLOUDFORMATION.create_stack(
             StackName=f'{cluster_name}',
-            TemplateBody=read_config_file("cluster.yaml"),
+            TemplateBody=read_config_file("aws", "cluster.yaml"),
             Parameters=[
                 {
                     "ParameterKey": "ClusterName",
@@ -241,7 +238,7 @@ def deploy_ondemand_workers(
                     "ParameterKey": "VpcId",
                     "ParameterValue": vpc_ids
                 },
-            ] + read_param_file("ondemand-nodes.json"),
+            ] + read_param_file("aws", "ondemand-nodes.json"),
             Capabilities=[
                 'CAPABILITY_IAM'
             ]
@@ -286,7 +283,7 @@ def deploy_spot_instances(
         logging.info(f"{spot_instances_name} not found. Creating new.")
         stack = CLOUDFORMATION.create_stack(
             StackName=f'{spot_instances_name}',
-            TemplateBody=read_config_file("spot-nodes.yaml"),
+            TemplateBody=read_config_file("aws", "spot-nodes.yaml"),
             Parameters=[
                 {
                     "ParameterKey": "ClusterName",
@@ -332,7 +329,7 @@ def deploy_utilities_stack(
     except:
         stack = CLOUDFORMATION.create_stack(
             StackName=utilities_name,
-            TemplateBody=read_config_file("utilities.yaml"),
+            TemplateBody=read_config_file("aws", "utilities.yaml"),
             Parameters=[
                 {
                     "ParameterKey": "Subnets",
