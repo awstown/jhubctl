@@ -2,42 +2,11 @@ import os
 import jinja2
 import subprocess
 from pathlib import Path
-from .utils import fill_template
-
-def kubectl(*args, config_yaml=None, **options):
-    """Runs a kubectl command and returns the stdout as a string
-    """
-    line = ["kubectl"]
-    for key, value in options.items():
-        if len(key) == 1:
-            lines += [f"-{key}", value]
-        else:
-            lines += [f"--{key}", value]
-
-    # Add yaml string as input to command
-    if config_yaml is not None:
-        line = [config_yaml, "|"] + line + ["-f", "-"]
-
-    output = subprocess.run(line)
-    return output.stdout.decode('utf-8')
+from .utils import fill_template, external_cli
 
 
-def helm(*args, config_yaml=None, **options):
-    """Runs a helm command and returns the stdout as a string
-    """
-    line = ["helm"]
-    for key, value in options.items():
-        if len(key) == 1:
-            lines += [f"-{key}", value]
-        else:
-            lines += [f"--{key}", value]
-
-    # Add yaml string as input to command
-    if config_yaml is not None:
-        line = [config_yaml, "|"] + line + ["-f", "-"]
-
-    output = subprocess.run(line)
-    return output.stdout.decode('utf-8')
+kubectl = external_cli("kubectl")
+helm = external_cli("helm")
 
 
 class KubernetesCluster(object):
@@ -48,20 +17,16 @@ class KubernetesCluster(object):
     """
     def __init__(
         self, 
-        context_name,
-        endpoint_url,
-        ca_cert):
+        context_name):
         self.context_name = context_name
-        self.endpoint_url = endpoint_url
-        self.ca_cert = ca_cert
 
     def setup(
         self,
+        kube_yaml,
         auth_yaml,
         storage_yaml):
         """Setup the kubernetes cluster."""
-        self.write_kubeconfig()
-        self.set_context()
+        self.setup_kubeconfig(kube_yaml)
         self.setup_auth(auth_yaml)
         self.setup_storage(storage_yaml)
         self.setup_helm()
@@ -73,20 +38,17 @@ class KubernetesCluster(object):
         """Check that a kubeconfig exists for this cluster."""
 
 
-    def write_kubeconfig(self):
+    def setup_kubeconfig(self, kube_yaml):
         """Write a kubectl config file to ~/.kube"""
-        # Create a configuratio nfile.
-        text = fill_template(
-            "kubeconfig.yaml.template",
-            endpoint_url=self.endpoint_url,
-            ca_cert=self.ca_cert,
-            cluster_name=self.context_name
-        )
-
         # Write configuration to .kube directory.
         config_path = f'{Path.home()}/.kube/config-{self.context_name}'
+
         with open(config_path, 'w') as ofile:
-            ofile.writelines(text)
+            ofile.writelines(kube_yaml)
+
+        os.environ['KUBECONFIG'] = config_path
+
+        self.set_context()
 
     def export_kubeconfig(self):
         """Write kubeconfig to path."""
@@ -95,7 +57,7 @@ class KubernetesCluster(object):
 
     def set_context(self):
         """Set the kubectl context."""
-        kubectl('config', 'use-context', self.context_name)
+        print(kubectl('config', 'use-context', self.context_name))
 
     def setup_auth(self, auth_yaml):
         """Set the auth_group for Kubernetes cluster from the cluster provider."""
@@ -114,8 +76,9 @@ class KubernetesCluster(object):
             clusterrole='cluster-admin', 
             serviceaccount='kube-system:tiller'
         )
+
         # Initialize helm and tiller.
-        helm('init', serviceaccount='tiller')
+        helm('init', '--service-account', 'tiller')
 
         # Secure helm
         kubectl('patch', 'deployment', 'tiller-deploy', 
@@ -127,7 +90,7 @@ class KubernetesCluster(object):
     def setup_jupyterhub(self):
         """Install Jupyterhub."""
         # Add the jupyterhub repo.
-        helm('repo'. 'add', 'jupyterhub', 'https://jupyterhub.github.io/helm-chart/')
+        helm('repo', 'add', 'jupyterhub', 'https://jupyterhub.github.io/helm-chart/')
 
         # Update the repo
         helm('repo', 'update')

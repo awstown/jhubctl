@@ -369,6 +369,9 @@ class AWS_EKS(Provider):
     name : str
         Name of the cluster.
     """
+    provider_alias = "aws"
+    provider_name = "AWS_EKS"
+
     def __init__(self, name):
         super(AWS_EKS, self).__init__(name)
 
@@ -392,7 +395,7 @@ class AWS_EKS(Provider):
 
     @property
     def vpc_ids(self):
-        return get_stack_value(self.vpc_stack, "VpcID")
+        return get_stack_value(self.vpc_stack, "VpcId")
 
     @property
     def endpoint_url(self):
@@ -548,15 +551,28 @@ class AWS_EKS(Provider):
     def get_auth_yaml(self):
         """"""
         return fill_template(
+            self.provider_alias, 
             "aws-auth-cm.yaml.template",
             arn=self.node_arn,
             users=self.admins
         )
+
     def get_storage_yaml(self):
         """"""
         return fill_template(
+            self.provider_alias,
             "efs-provisioner.yaml.template",
             clusterName=self.cluster_name,
             region=boto3.Session().region_name,
             efsSystemId=self.efs_id
+        )
+
+    def get_kube_yaml(self):
+        """"""
+        return fill_template(
+            self.provider_alias,
+            "kubeconfig.yaml.template",
+            endpoint_url=self.endpoint_url,
+            ca_cert=self.ca_cert,
+            cluster_name=self.cluster_name
         )

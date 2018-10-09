@@ -3,9 +3,7 @@ import click
 import logging
 import click_log
 
-from . import providers
-from . import kube
-from . import hub
+from .deployment import Deployment
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -30,20 +28,19 @@ def create():
 def create_cluster(cluster_name, provider):
     """Create an Jupyterhub/EKS cluster."""
     # Load provider class.
-    Provider = getattr(providers, provider)
-    # Deploy cluster on provider.
-    provider = Provider(cluster_name)
-    provider.deploy_cluster()
-
+    deployment = Deployment(cluster_name, provider)
+    deployment.deploy()
 
 @create.command("hub")
 @click.argument("hub_name")
 @click.option("--cluster", help="Cluster to use. Otherwise, will use the default kubectl env.")
+@click.option("--provider", default="AWS_EKS", help="Cloud provider to use.")
 @click_log.simple_verbosity_option(logger)
 def create_hub(hub_name, cluster):
     """"""
 
 
+-
 @cli.group()
 @click_log.simple_verbosity_option(logger)
 def delete():
@@ -55,11 +52,6 @@ def delete():
 @click.option("--provider", default="AWS_EKS", help="Cloud provider to use.")
 def delete_cluster(cluster_name, provider):
     """Create an Jupyterhub/EKS cluster."""
-    # Load provider class.
-    Provider = getattr(providers, provider)
-    # Deploy cluster on provider.
-    provider = Provider(cluster_name)
-    provider.teardown_cluster()
 
 
 @cli.group()
