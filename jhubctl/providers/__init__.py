@@ -1,1 +1,1 @@
-from .aws import AWS_EKS
+from .aws import AwsEks

@@ -36,7 +36,7 @@ setup(
     url=URL,
     packages=find_packages(exclude=('tests',)),
     entry_points={
-        'console_scripts': ['jhubctl=jhubctl.main:cli'],
+        'console_scripts': ['jhubctl=jhubctl.main:main'],
     },
     install_requires=REQUIRED,
     include_package_data=True,

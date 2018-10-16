@@ -1,6 +1,6 @@
 ---
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'EKS Deployment for Jupyter ES'
+Description: 'EKS Cluster configured for JupyterHub deployments.'
 
 
 Parameters:

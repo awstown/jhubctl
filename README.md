@@ -34,9 +34,19 @@ s3jhub
 cool-new-hub-feature
 ```
 
+## Using kubectl with jhubctl
+
+If you want to 
+```
+kubectl config --kubeconfig=jhubctl-config get-context <deployment-name>
+```
+
+
 ## Install
 
 Clone this repo, change into the main directory, and run:
 ```
 pip install -e .
 ```
+
+

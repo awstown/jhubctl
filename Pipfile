@@ -7,6 +7,7 @@ name = "pypi"
 jhubctl = {editable = true, path = "."}
 ipython = "*"
 click-log = "*"
+traitlets = "*"
 
 [dev-packages]
 
