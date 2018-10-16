@@ -8,7 +8,12 @@ class SubclassError(Exception):
 
 
 def sanitize_path(path):
-    
+    if isinstance(path, str):
+        path = pathlib.Path(path).resolve()
+    elif isinstance(path, pathlib.Path):
+        path = path.resolve()
+    else:
+        raise Exception()
     return path
 
 
@@ -30,8 +35,8 @@ def get_template(template_path, **parameters):
         Template as a string filled in with parameters.
     """
     path = sanitize_path(template_path)
-    template_file = path.stem
-    template_dir = str(path.parents)
+    template_file = path.name
+    template_dir = str(path.parent)
 
     ## Apply ARN of instance role of worker nodes and apply to cluster
     template_loader = jinja2.FileSystemLoader(searchpath=template_dir)

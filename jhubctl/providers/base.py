@@ -12,6 +12,9 @@ class Provider(Configurable):
     provider_alias = Unicode(help="Simple alias pointing to this provider.")
     cluster_name = Unicode(help="Name of cluster.")
 
+    def __init__(self, name):
+        self.name = name
+
     def check_if_cluster_is_deployed(self):
         """Returns True if the cluster is deployed and available.
         """

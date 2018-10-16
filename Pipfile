@@ -8,6 +8,7 @@ jhubctl = {editable = true, path = "."}
 ipython = "*"
 click-log = "*"
 traitlets = "*"
+tqdm = "*"
 
 [dev-packages]
 

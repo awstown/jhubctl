@@ -7,6 +7,8 @@ import subprocess
 import logging
 import pathlib
 
+import tqdm
+
 from traitlets import (
     Unicode,
     default
@@ -63,15 +65,20 @@ def create_stack(
         stack = get_stack(f'{stack_name}')
     except:
         # Create stack
+        options = {}
+        if parameters is not None:
+            options.update(Parameters=parameters)
+        if capabilities is not None:
+            options.update(Capabilities=capabilities)
+
         stack = CLOUDFORMATION.create_stack(
             StackName=stack_name,
             TemplateBody=get_template(stack_template_path),
-            Parameters=parameters,
-            Capabilities=capabilities
+            **options
         )
         # Wait for response.
         WAITER.wait(StackName=stack.name)
-        raise_if_stack_does_not_exist(stack)
+        raise_if_does_not_exist(stack)
 
 
 def get_stack_value(stack, key):
@@ -98,10 +105,6 @@ class AwsEks(Provider):
     # Configurable options
     # ------------------------------------------------------------------------
 
-    name = Unicode(
-        help="Name of the Provider instance."
-    )
-
     provider_source = Unicode('AWS EKS')
     provider_alias = Unicode('aws')
 
@@ -112,7 +115,7 @@ class AwsEks(Provider):
 
     @default('template_dir')
     def _default_template_dir(self):
-        cwd = pathlib.Path(__path__).parent
+        cwd = pathlib.Path(__file__).parent
         template_dir = cwd.joinpath('templates')
         return str(template_dir)
 
@@ -123,7 +126,7 @@ class AwsEks(Provider):
 
     @default('role_name')
     def _default_role_name(self):
-        return Unicode(f'{self.name}-role')
+        return f'{self.name}-role'
 
     # Virtual private cloud name
     vpc_name = Unicode(
@@ -132,7 +135,7 @@ class AwsEks(Provider):
 
     @default('vpc_name')
     def _default_vpc_name(self):
-        return Unicode(f'{self.name}-vpc')
+        return f'{self.name}-vpc'
         
     # Name of EKS cluster.
     cluster_name = Unicode(
@@ -251,22 +254,32 @@ class AwsEks(Provider):
         """Deploy a cluster on Amazon's EKS Service configured
         for Jupyterhub Deployments.
         """
-        print('Deploying...')
-        # self.create_eks_role()
-        # self.create_vpc()
-        # self.create_cluster()
-        # self.create_node_group()
-        # self.create_spot_nodes()
-        # self.create_utilities()
+        steps = [
+            self.create_eks_role,
+            self.create_vpc,
+            self.create_cluster,
+            # self.create_node_group,
+            # self.create_spot_nodes,
+            # self.create_utilities
+        ]
+        # Execute creation.
+        for step in tqdm.tqdm(steps):
+            step()
+
 
     def delete(self):
-        print(type(self))
-        # self.delete_stack(self.utilities_name)
-        # self.delete_stack(self.spot_nodes_name)
-        # self.delete_stack(self.node_group_name)
-        # self.delete_stack(self.cluster_name)
-        # self.delete_stack(self.vpc_name)
-        # self.delete_stack(self.role_name)
+        """Delete a running cluster."""
+        stacks = [
+            self.utilities_name,
+            self.spot_nodes_name,
+            self.node_group_name,
+            self.cluster_name,
+            self.vpc_name,
+            self.role_name
+        ]
+        # Execute creation.
+        for stack in tqdm.tqdm(stacks):
+            self.delete_stack(stack)
 
     def delete_stack(self, stack_name):
         """Teardown a stack."""
@@ -285,7 +298,7 @@ class AwsEks(Provider):
         """Create a stack using Amazon's Cloud formation"""
         # Build template_path
         stack_template_path = pathlib.Path(
-            self.template_path).joinpath(stack_template_name)
+            self.template_dir).joinpath(stack_template_name)
 
         # Create stack
         create_stack(

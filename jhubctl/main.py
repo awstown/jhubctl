@@ -9,106 +9,88 @@ from traitlets import (
 from . import providers
 
 
-class BaseSubcommand(Application):
-    
+class Deployment(Application):
+    """
+    """
     name = Unicode()
     description = Unicode()
-    method = Unicode(help="Method to call on resource object.")
+    action = Unicode(help="Action to execute on resource.")
+    classes = List([
+        providers.AwsEks
+    ])
 
-    resource_options = Dict({
-        'cluster': 'provider'
-        # 'hub':
-        # 'ng':
-    }, help="Mapping CMD to jhubctl attribute names.")
+    def init_cluster(self, name):
+        """Initialize the cluster."""
+        self.cluster = providers.AwsEks(name=name)
 
-    def get_resource(self, resource_type):
+    def init_hub(self, name):
+        pass
+        
+    def init_ng(self, name):
+        pass
+
+    def init_resource(self, resource_type, name):
+        """Initialize the Resource."""
         try:
-            parent_attr = self.resource_options[resource_type]
-            resource = getattr(self.parent, parent_attr)
+            method = getattr(self, f"init_{resource_type}")
+            method(name)
+        except AttributeError:
+            raise AttributeError(
+                "Resource options must be cluster, hub, or ng.")
+
+    def get_resource(self, resource_type, name):
+        try:
+            resource = getattr(self, resource_type)
             return resource
         except AttributeError:
             raise AttributeError(
                 "Resource options must be cluster, hub, or ng.")
 
     def initialize(self, argv=None):
-        # Handle no arguments.
-        if len(argv) == 0:
-            self.print_help()
-            self.exit()
-
+        """
+        """
         self.parse_command_line(argv)
-        resource_type = argv[0]
-        resource_args = argv[1:]
+        resource_type = self.argv[0]
+        resource_name = self.argv[1]
+        resource_args = self.argv[2:]
 
-        # Get resource
-        resource = self.get_resource(resource_type)
-        method = getattr(resource, self.method)
-        method(resource_args)
+        self.init_resource(resource_type, resource_name)
+        resource = self.get_resource(resource_type, resource_name)
+        action = getattr(resource, self.action)
+        action(*resource_args)
 
 
-class CreateSubcommand(BaseSubcommand):
-    """"""
-
+class CreateSubcommand(Deployment):
     name = Unicode(u'create')
     description = Unicode(u'`create` subcommand')
-    method = Unicode(u'create')
+    action = Unicode(u'create')
 
 
-class DeleteSubcommand(BaseSubcommand):
+class DeleteSubcommand(Deployment):
     name = Unicode(u'delete')
     description = Unicode('delete subcommand.')
-    method = Unicode(u'delete')
-
+    action = Unicode(u'delete')
 
 
 class JhubCtl(Application):
     """Jupyterhub Deployments configuration system."""
 
     name = Unicode(u'jhubctl')
-
     classes = List([
-        # Kubernetes
+        providers.AwsEks
     ])
 
-    subcommands = Dict({
-        'create': (CreateSubcommand, 'Create resource.'),
-        'delete': (DeleteSubcommand, 'Delete resource'),
-        # 'create': (CreateSubcommand, 'Delete resource'),
-        # 'edit': (EditSubcommand, 'Delete resource'),
-        # 'config': (ConfigSubcommand, 'Delete resource'),
-    })
-
-    provider_class = Unicode(
-        help="Cloud provider."
-    ).tag(config=True)
-
-    @default('provider_class')
-    def _default_provider_class(self):
-        provider_class = 'AwsEks'
-        self.classes.append(provider_class)
-        return provider_class
-
-    @observe('provider_class')
-    def _observe_provider_class(self, change):
-        # Remove the old class and add new one.
-        self.classes.remove(change['old'])
-        self.classes.append(change['new'])
-    
-    def init_provider(self):
-        # Get provider and ini
-        Provider = getattr(providers, self.provider_class)
-        self.provider = Provider
+    # subcommands = Dict({
+    #     'create': (CreateSubcommand, 'Create resource.'),
+    #     'delete': (DeleteSubcommand, 'Delete resource'),
+    #     # 'get': (GetSubcommand, 'Get resource'),
+    #     # 'edit': (EditSubcommand, 'Edit resource'),
+    #     # 'config': (ConfigSubcommand, 'Config system'),
+    # })
 
     def initialize(self, argv=None):
-        self.init_provider()
         self.parse_command_line(argv)
-        # # Handle no args
-        # if argv is None:
-        #     print("AAAHAHHHH")
-        #     self.print_help()
-        #     self.exit()
-
-
+        print('initialize jhubctl')
 
     def start(self):
         pass
