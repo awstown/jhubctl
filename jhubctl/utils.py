@@ -6,6 +6,28 @@ class SubclassError(Exception):
     """Must be implemented in a subclass."""
 
 
+def external_cli(name):
+    """Build a wrapper for external subprocess command."""
+
+    def command(*args, config_yaml=None, **options):
+        f"""Runs a {name} command and returns the stdout as a string
+        """
+        line = [name] + list(args)
+        for key, value in options.items():
+            if len(key) == 1:
+                line += [f"-{key}", value]
+            else:
+                line += [f"--{key}", value]
+        # Add yaml string as input to command
+        if config_yaml is not None:
+            line = ["echo", config_yaml, "|"] + line + ["-f", "-"]
+        # Return output if anything is returned from subprocess.
+        output = subprocess.run(line)  # , capture_output=True)
+        if output.stdout is not None:
+            return output.stdout.decode('utf-8')
+
+    return command
+
 
 def sanitize_path(path):
     if isinstance(path, str):

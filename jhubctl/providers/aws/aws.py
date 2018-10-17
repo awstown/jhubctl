@@ -17,43 +17,28 @@ from ..base import Provider
 from ...utils import get_template
 
 CLIENT = boto3.client('cloudformation')
-WAITER = CLIENT.get_waiter('stack_create_complete')
+CREATE_WAITER = CLIENT.get_waiter('stack_create_complete')
+DELETE_WAITER = CLIENT.get_waiter('stack_delete_complete')
 CLOUDFORMATION = boto3.resource('cloudformation')
 IAM = boto3.client('iam')
 EKS = boto3.client('eks')
 
 
-class ResourceDoesNotExistError(Exception):
-    """Resource does not exist."""
-
-
-def raise_if_does_not_exist(resource):
-    if does_resource_exist(resource) is False:
-        raise ResourceDoesNotExistError
-
-
-def does_resource_exist(resource):
+def stack_exists(name):
     """Use boto3 to check if a resource exists."""
     try:
-        resource.load()
+        CLIENT.describe_stacks(StackName=name)
         return True
-    except botocore.exceptions.ClientError as e:
-        if e.response['Error']['Code'] == 'ValidationError':
-            return False
-        else:
-            raise e
+    except:
+        return False
 
 
 def get_stack(name):
     """Get stack from AWS's cloud formation."""
-    try:
-        stack = CLOUDFORMATION.Stack(f"{name}")
-        WAITER.wait(StackName=stack.name)
-        raise_if_does_not_exist(stack)
-        return stack
-    except ResourceDoesNotExistError:
-        raise ResourceDoesNotExistError("This stack doesn't exist yet.")
-
+    stack_exists(name)
+    stack = CLOUDFORMATION.Stack(f"{name}")
+    return stack
+ 
 
 def create_stack(
         stack_name,
@@ -61,9 +46,8 @@ def create_stack(
         parameters=None,
         capabilities=None
     ):
-    try:
-        stack = get_stack(f'{stack_name}')
-    except:
+    # Create stack if it does not exist.
+    if stack_exists(stack_name) is False:
         # Create stack
         options = {}
         if parameters is not None:
@@ -77,8 +61,7 @@ def create_stack(
             **options
         )
         # Wait for response.
-        WAITER.wait(StackName=stack.name)
-        raise_if_does_not_exist(stack)
+        CREATE_WAITER.wait(StackName=stack.name)
 
 
 def get_stack_value(stack, key):
@@ -255,17 +238,16 @@ class AwsEks(Provider):
         for Jupyterhub Deployments.
         """
         steps = [
-            self.create_eks_role,
+            self.create_role,
             self.create_vpc,
             self.create_cluster,
-            # self.create_node_group,
-            # self.create_spot_nodes,
-            # self.create_utilities
+            self.create_node_group,
+            self.create_spot_nodes,
+            self.create_utilities
         ]
         # Execute creation.
-        for step in tqdm.tqdm(steps):
+        for step in tqdm.tqdm(steps, ncols=70):
             step()
-
 
     def delete(self):
         """Delete a running cluster."""
@@ -278,7 +260,7 @@ class AwsEks(Provider):
             self.role_name
         ]
         # Execute creation.
-        for stack in tqdm.tqdm(stacks):
+        for stack in tqdm.tqdm(stacks, ncols=70):
             self.delete_stack(stack)
 
     def delete_stack(self, stack_name):
@@ -287,6 +269,7 @@ class AwsEks(Provider):
         CLIENT.delete_stack(
             StackName=stack_name
         )
+        DELETE_WAITER.wait(StackName=stack_name)
 
     def create_stack(
         self, 
@@ -308,7 +291,7 @@ class AwsEks(Provider):
             capabilities=capabilities
         )
 
-    def create_eks_role(self):
+    def create_role(self):
         """Create an EKS Role configured to create JupyterHub Deployments
         on an EKS Provider.
         """
