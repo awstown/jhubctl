@@ -14,7 +14,8 @@ from traitlets import (
     default
 )
 from ..base import Provider
-from ...utils import get_template
+from ...utils import get_template, external_cli
+
 
 CLIENT = boto3.client('cloudformation')
 CREATE_WAITER = CLIENT.get_waiter('stack_create_complete')
@@ -23,6 +24,7 @@ CLOUDFORMATION = boto3.resource('cloudformation')
 IAM = boto3.client('iam')
 EKS = boto3.client('eks')
 
+aws_cli = external_cli('aws')
 
 def stack_exists(name):
     """Use boto3 to check if a resource exists."""
@@ -243,7 +245,8 @@ class AwsEks(Provider):
             self.create_cluster,
             self.create_node_group,
             self.create_spot_nodes,
-            self.create_utilities
+            self.create_utilities,
+            self.create_kubeconfig
         ]
         # Execute creation.
         for step in tqdm.tqdm(steps, ncols=70):
@@ -369,6 +372,11 @@ class AwsEks(Provider):
                 NodeSecurityGroup=self.node_security_group
             )
         )
+
+    def create_kubeconfig(self):
+        """Add a configuration to your kubeconfig
+        """
+        aws_cli('eks', 'update-kubeconfig', name=self.name)
 
     def get_template(self, template_name,**parameters):
         """"""

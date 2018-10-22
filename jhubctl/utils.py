@@ -1,6 +1,6 @@
 import jinja2
 import pathlib
-
+import subprocess
 
 class SubclassError(Exception):
     """Must be implemented in a subclass."""
@@ -27,6 +27,10 @@ def external_cli(name):
             return output.stdout.decode('utf-8')
 
     return command
+
+
+kubectl = external_cli("kubectl")
+helm = external_cli("helm")
 
 
 def sanitize_path(path):
