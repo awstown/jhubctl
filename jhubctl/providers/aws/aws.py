@@ -142,7 +142,7 @@ class AwsEKS(Provider):
         help="Name of the spot nodes stack"
     ).tag(config=True)
 
-    @default('spot_nodes')
+    @default('spot_nodes_name')
     def _default_spot_nodes(self):
         return f'{self.name}-spot-nodes'
 
@@ -153,6 +153,10 @@ class AwsEKS(Provider):
     @default('utilities_name')
     def _default_utilities_name(self):
         return f'{self.name}-utilities'
+
+    ssh_key_name = Unicode(
+        help='User SSH key name'
+    ).tag(config=True)
 
     # ------------------------------------------------------------------------
     # Provider Attributes
@@ -238,17 +242,18 @@ class AwsEKS(Provider):
         for Jupyterhub Deployments.
         """
         steps = [
-            self.create_role,
-            self.create_vpc,
-            self.create_cluster,
-            self.create_node_group,
-            self.create_spot_nodes,
-            self.create_utilities,
-            self.create_kubeconfig
+            (self.create_role, (), {}),
+            (self.create_vpc, (), {}),
+            (self.create_cluster, (), {}),
+            (self.create_node_group, (), {}),
+            (self.create_spot_nodes, (), {}),
+            (self.create_utilities, (), {}),
+            (self.create_kubeconfig, (), {})
         ]
         # Execute creation.
         for step in tqdm.tqdm(steps, ncols=70):
-            step()
+            method, args, kwargs = step
+            method(*args, **kwargs)
 
     def delete(self):
         """Delete a running cluster."""
@@ -266,7 +271,7 @@ class AwsEKS(Provider):
 
     def delete_stack(self, stack_name):
         """Teardown a stack."""
-        get_stack(f'{stack_name}')
+        get_stack(stack_name)
         CLIENT.delete_stack(
             StackName=stack_name
         )
@@ -297,7 +302,7 @@ class AwsEKS(Provider):
         on an EKS Provider.
         """
         self.create_stack(
-            f'{self.role_name}',
+            self.role_name,
             'amazon-eks-service-role.yaml',
             capabilities=['CAPABILITY_NAMED_IAM']
         )
@@ -307,7 +312,7 @@ class AwsEKS(Provider):
         for deploying JupyterHubs.
         """
         self.create_stack(
-            f'{self.vpc_name}',
+            self.vpc_name,
             'amazon-eks-vpc.yaml',
             parameters=define_parameters(
                 VpcBlock="10.42.0.0/16",
@@ -321,7 +326,7 @@ class AwsEKS(Provider):
         """Creates a cluster on Amazon EKS .
         """
         self.create_stack(
-            f'{self.cluster_name}',
+            self.cluster_name,
             'amazon-eks-cluster.yaml',
             parameters=define_parameters(
                 ClusterName=self.cluster_name,
@@ -334,13 +339,19 @@ class AwsEKS(Provider):
         """Create on-demand node group on Amazon EKS.
         """
         self.create_stack(
-            f'{self.node_group_name}',
+            self.node_group_name,
             'amazon-eks-nodegroup.yaml',
+            capabilities=['CAPABILITY_IAM'],
             parameters=define_parameters(
                 ClusterName=self.cluster_name,
-                ControlPlaneSecurityGroup=self.security_groups,
+                ClusterControlPlaneSecurityGroup=self.security_groups,
                 Subnets=self.subnet_ids,
-                VpcId=self.vpc_ids
+                VpcId=self.vpc_ids,
+                KeyName=self.ssh_key_name,
+                NodeAutoScalingGroupMaxSize="1",
+                NodeVolumeSize="100",
+                NodeImageId="ami-0a54c984b9f908c81",
+                NodeGroupName=f"{self.name} OnDemand Nodes"
             )
         )
 
@@ -348,14 +359,15 @@ class AwsEKS(Provider):
         """Create spot nodes.
         """
         self.create_stack(
-            f'{self.spot_nodes_name}',
+            self.spot_nodes_name,
             'amazon-spot-nodes.yaml',
             parameters=define_parameters(
                 ClusterName=self.cluster_name,
                 Subnets=self.subnet_ids,
                 NodeInstanceProfile=self.node_instance_profile,
                 NodeInstanceRole=self.node_instance_role,
-                NodeSecurityGroup=self.node_security_group
+                NodeSecurityGroup=self.node_security_group,
+
             )
         )
 
@@ -363,7 +375,7 @@ class AwsEKS(Provider):
         """Create utitilies stack.
         """
         self.create_stack(
-            f'{self.utilities_name}',
+            self.utilities_name,
             'amazon-utilities.yaml',
             parameters=define_parameters(
                 Subnets=self.subnet_ids,

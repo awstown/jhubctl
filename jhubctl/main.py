@@ -16,7 +16,7 @@ from kubeconf import KubeConf
 
 from .utils import JhubctlError
 from . import providers
-from .jhub import Hub
+from .hubs import HubList
 
 
 def exception_handler(exception_type, exception, traceback):
@@ -36,7 +36,7 @@ class JhubCtl(Application):
 
     classes = List([
         KubeConf,
-        Hub
+        HubList
     ])
 
     provider_type = Unicode(
@@ -65,7 +65,6 @@ class JhubCtl(Application):
             if help_arg:
                 sys.argv.remove(arg)
                 break
-
 
         # # Parse configuration items on command line.
         self.parse_command_line()
@@ -107,13 +106,13 @@ class JhubCtl(Application):
 
         # Get resource.
         self.cluster = self.ProviderClass
-        self.hub = Hub
+        self.hub = HubList
 
     def start(self):
         """Execution happening on jhubctl."""
         # Get specified resource.
         Resource = getattr(self, self.resource_type)
-        self.resource = Resource(name=self.resource_name)
+        self.resource = Resource(name=self.resource_name, ssh_key_name='zsailer')
         self.action = getattr(self.resource, self.resource_action)
 
         # Execute action

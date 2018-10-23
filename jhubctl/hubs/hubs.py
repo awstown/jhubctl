@@ -5,9 +5,27 @@ from traitlets import (
     default
 )
 
-class Hub(Configurable):
+class HubList(Configurable):
     """JupyterHub.
     """
+    def initialize(self):
+        """Initialize JupyterHub."""
+        
+
+    def create(self, name):
+        """Create a jupyterhub deployment on the cluster."""
+        SingleHub()
+
+    def get(self):
+        """Get all jupyterHubs.
+        """
+        helm
+
+
+class SingleHub(Configurable):
+    """Single instance of a JupyterHub deployment.
+    """
+
     helm_repo = Unicode(
         u'https://jupyterhub.github.io/helm-chart/',
         help="Jupyterhub Helm Chart repo."
@@ -27,7 +45,7 @@ class Hub(Configurable):
     ).tag(config=True)
 
     def create(self):
-        """Create a jupyterhub deployment on the cluster."""
+        """Create a single instance of notebook."""
         helm(
             "upgrade",
             "--install",
@@ -37,3 +55,7 @@ class Hub(Configurable):
             version=self.version,
         )
 
+    def delete(self):
+        """Delete a Jupyterhub"""
+
+    
