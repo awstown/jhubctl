@@ -8,7 +8,6 @@ from traitlets import (
 class Hub(Configurable):
     """JupyterHub.
     """
-    
     helm_repo = Unicode(
         u'https://jupyterhub.github.io/helm-chart/',
         help="Jupyterhub Helm Chart repo."
@@ -35,5 +34,6 @@ class Hub(Configurable):
             self.release,
             "jupyterhub/jupyterhub",
             namespace=self.namespace,
-            version=version,
+            version=self.version,
         )
+

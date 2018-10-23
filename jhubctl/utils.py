@@ -5,6 +5,8 @@ import subprocess
 class SubclassError(Exception):
     """Must be implemented in a subclass."""
 
+class JhubctlError(Exception):
+    """CLI exceptions"""
 
 def external_cli(name):
     """Build a wrapper for external subprocess command."""

@@ -1,1 +1,1 @@
-from .aws import AwsEks
+from .aws import AwsEKS

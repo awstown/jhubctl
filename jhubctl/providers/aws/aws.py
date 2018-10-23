@@ -82,7 +82,7 @@ def define_parameters(**parameters):
     return params
 
 
-class AwsEks(Provider):
+class AwsEKS(Provider):
     """AWS EKS configured for launching JupyterHub deployments.
     
     """
@@ -90,7 +90,7 @@ class AwsEks(Provider):
     # Configurable options
     # ------------------------------------------------------------------------
 
-    provider_source = Unicode('AWS EKS')
+    provider_source = Unicode('Amazon Web Services EKS')
     provider_alias = Unicode('aws')
 
     # Path to templates for this provider.

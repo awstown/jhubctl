@@ -9,9 +9,17 @@ ipython = "*"
 click-log = "*"
 traitlets = "*"
 tqdm = "*"
+pyyaml = "*"
+traitlets-paths = "*"
+kubeconf = "*"
 
 [dev-packages]
 "autopep8" = "*"
+sphinx-rtd-theme = "*"
+sphinx = "*"
+ipython = "*"
+pytest = "*"
+pylint = "*"
 
 [requires]
 python_version = "3.7"
