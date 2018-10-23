@@ -14,7 +14,7 @@ from traitlets import (
     default
 )
 from ..base import Provider
-from ...utils import get_template, external_cli
+from ...utils import get_template, external_cli, kubectl
 
 
 CLIENT = boto3.client('cloudformation')
@@ -83,9 +83,7 @@ def define_parameters(**parameters):
 
 
 class AwsEKS(Provider):
-    """AWS EKS configured for launching JupyterHub deployments.
-    
-    """
+    """AWS EKS configured for launching JupyterHub deployments."""
     # ------------------------------------------------------------------------
     # Configurable options
     # ------------------------------------------------------------------------
@@ -138,7 +136,7 @@ class AwsEKS(Provider):
 
     @default('node_group_name')
     def _default_node_group_name(self):
-        return f'{self.name}-node_group'
+        return f'{self.name}-node-group'
 
     spot_nodes_name = Unicode(
         help="Name of the spot nodes stack"

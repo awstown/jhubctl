@@ -117,11 +117,11 @@
         },
         "kubeconf": {
             "hashes": [
-                "sha256:64aac2fbe3d872b76af4eb80ccbd67f7b3c04cd135873085038c3513a2f821da",
-                "sha256:ef1d146c485b6695d42521fbde1e55f252a7f79e6a37bfd1932e9b0128e5201f"
+                "sha256:36b82db238738f4bb33f14abe4f59459df2c26574a2a26ac875f12511c0d653f",
+                "sha256:7e04dfe796512902a6fc37a70a6fdb9158027bde7320d53ca1ead191b7e5aace"
             ],
             "index": "pypi",
-            "version": "==0.0.4"
+            "version": "==0.0.5"
         },
         "markupsafe": {
             "hashes": [

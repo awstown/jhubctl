@@ -1,6 +1,9 @@
 import sys
+import re
+from copy import deepcopy 
 
-from traitlets.config import Application, Configurable
+from ipython_genutils import py3compat
+from traitlets.config import Application, Configurable, catch_config_error
 from traitlets import (
     default,
     observe,
@@ -20,7 +23,7 @@ def exception_handler(exception_type, exception, traceback):
     """Handle jhubctl exceptions"""
     print(f'{exception_type.__name__}: {exception}')
 
-sys.excepthook = exception_handler
+#sys.excepthook = exception_handler
 
 
 class JhubCtl(Application):
@@ -32,7 +35,6 @@ class JhubCtl(Application):
     )
 
     classes = List([
-        #providers.AwsEks,
         KubeConf,
         Hub
     ])
@@ -64,10 +66,11 @@ class JhubCtl(Application):
                 sys.argv.remove(arg)
                 break
 
-        # Parse configuration items on command line.
+
+        # # Parse configuration items on command line.
         self.parse_command_line()
 
-        # Set the provider
+        # Append Provider Class to the list of configurable items.
         self.ProviderClass = getattr(providers, self.provider_type)
         self.classes.append(self.ProviderClass)
 
@@ -105,7 +108,6 @@ class JhubCtl(Application):
         # Get resource.
         self.cluster = self.ProviderClass
         self.hub = Hub
-
 
     def start(self):
         """Execution happening on jhubctl."""
