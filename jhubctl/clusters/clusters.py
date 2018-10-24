@@ -2,7 +2,7 @@ import pprint
 from traitlets.config import Configurable
 from . import providers
 
-from jhubctl.utils import kubectl, helm
+from jhubctl.utils import kubectl, helm, JhubctlError
 
 
 class ClusterList(Configurable):
@@ -13,6 +13,14 @@ class ClusterList(Configurable):
     def __init__(self, kubeconf=None, **traits):
         self.kubeconf = kubeconf
         super().__init__(**traits)
+
+    def check_cluster_exists(self, name):
+        """Check if cluster exists. If it does not, raise exception."""
+        clusters = self.kubeconf.get_clusters()
+        names = [c['name'] for c in clusters]
+        if name in names:
+            return True
+        return False
 
     def get(self, name=None, provider='AwsEKS', print_output=True):
         """List all cluster.
@@ -28,6 +36,10 @@ class ClusterList(Configurable):
             for cluster in clusters:
                 print(f"  - {cluster['name']}")
         else:
+            # Check that cluster exists.
+            if self.check_cluster_exists(name) is False:
+                raise JhubctlError("Cluster name not found in availabe clusters.")
+
             cluster = self.kubeconf.get_cluster(name=cluster.cluster_name)
             pprint.pprint(cluster, depth=4)
 
@@ -37,7 +49,7 @@ class ClusterList(Configurable):
         # ----- Create K8s cluster on provider -------
         # Create cluster object
         Cluster = getattr(providers, provider)
-        cluster = Cluster(name)
+        cluster = Cluster(name=name, ssh_key_name='zsailer')
         cluster.create()
 
         # -------- Add cluster to kubeconf -----------
@@ -76,7 +88,6 @@ class ClusterList(Configurable):
         kubectl('apply', config_yaml=cluster.get_auth_config())
 
         # -------- Setup Storage ----------
-
         kubectl('apply', config_yaml=cluster.get_storage_config())
 
         # ------- setup helm locally ------
@@ -116,6 +127,9 @@ class ClusterList(Configurable):
     def delete(self, name, provider='AwsEKS'):
         """Delete a Kubernetes cluster.
         """
+        if self.check_cluster_exists(name) if False:
+            raise JhubctlError("Cluster name not found in availabe clusters.")
+
         # Create cluster object
         Cluster = getattr(providers, provider)
         cluster = Cluster(name)

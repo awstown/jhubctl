@@ -6,17 +6,23 @@ from traitlets import (
     default
 )
 
+from .single import Hub
+
 class HubList(Configurable):
     """JupyterHub.
     """
-    def initialize(self):
-        """Initialize JupyterHub."""
-        
 
     def create(self, name):
         """Create a jupyterhub deployment on the cluster."""
+        hub = Hub(namespace=name)
+        hub.create()
 
-    def get(self):
-        """Get all jupyterHubs.
+    def get(self, name=None):
+        """List all jupyterHubs.
         """
         
+    def delete(self, name):
+        """Delete Hub from Kubernetes Cluster
+        """
+        hub = Hub(namespace=name)
+        hub.delete()

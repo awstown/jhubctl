@@ -1,9 +1,20 @@
 import sys
+import os
 import re
 from copy import deepcopy 
 
+from ipython_genutils.text import indent
 from ipython_genutils import py3compat
-from traitlets.config import Application, Configurable, catch_config_error
+
+from traitlets.config.loader import (
+    KVArgParseConfigLoader, PyFileConfigLoader, Config, ArgumentError, ConfigFileNotFound, JSONFileConfigLoader
+)
+from traitlets.config import (
+    Application, 
+    Configurable, 
+    catch_config_error
+)
+
 from traitlets import (
     default,
     observe,
@@ -16,8 +27,7 @@ from kubeconf import KubeConf
 
 from .utils import JhubctlError
 from .clusters import providers, ClusterList
-from .hubs import HubList
-
+from .hubs import HubList, Hub
 
 
 def exception_handler(exception_type, exception, traceback):
@@ -27,63 +37,106 @@ def exception_handler(exception_type, exception, traceback):
 #sys.excepthook = exception_handler
 
 
-class JhubCtl(Application):
-    """Jupyterhub Deployments configuration system."""
+class JhubctlApp(Application):
+    """Main application for deploying jupyterhub on cloud services.
+    """
 
+    # Name of the commandline application
     name = Unicode(u'jhubctl')
-    description= Unicode(
-        u'Command line interface for deploying Jupyterhub on Kubernetes Clusters.'
+
+    # Documentation used at the top of the CLI help.
+    description = Unicode(
+        u"A familiar CLI for managing JupyterHub "
+        u"deployments on Kubernetes clusters."
     )
 
+    # Printed examples for the help.
+    examples = Unicode(
+        u" > jhubctl create hub myhub"
+    )
+
+    # Classes to expose to the config system
     classes = List([
         KubeConf,
-        HubList
+        Hub
     ])
 
+    # Provider to configure.
     provider_type = Unicode(
         u'AwsEKS',
         help="Provider type."
     ).tag(config=True)
     
-    actions = List([
-        'create',
-        'delete',
-        'get',
-    ])
+    # Subcommands allowed by application.
+    subcommands = Dict({
+        'create': ((), 'Create a resource.'),
+        'delete': ((), 'Delete a resource.'),
+        'get': ((), 'List a resource or resources'),
+    })
 
+    # Resource that can be deployed and managed.
     resources = List([
         'cluster',
         'hub',
         'ng'
     ])
 
-    def initialize(self):
-        """Handle specific configurations."""
-        ###### This is a bit of a hack to customize help documentation
-        # Strip out any help args
-        for arg in sys.argv:
-            help_arg = arg in ('--help-all', '-h', '--help')
-            if help_arg:
-                sys.argv.remove(arg)
-                break
+    def print_subcommands(self):
+        """Print the subcommand part of the help."""
+        lines = ["Call"]
+        lines.append('-'*len(lines[-1]))
+        lines.append('')
+        lines.append("> jhubctl <subcommand> <resource-type> <resource-name>")
+        lines.append('')
+        lines.append("Subcommands")
+        lines.append('-'*len(lines[-1]))
+        lines.append('')
 
-        # # Parse configuration items on command line.
-        self.parse_command_line()
+        for subcommand in self.subcommands:
+            lines.append(subcommand[0])
+            lines.append(indent(subcommand[1]))
 
-        # ADD SERVER CLASS TO OUR LIST OF CLASSES THAT ARE CONFIGURABLE.
-        # THIS SI A HACK RIGHT NOW, NEED TO FIGURE THIS OUT.
+        lines.append('')
+        print(os.linesep.join(lines))
+
+
+    @catch_config_error
+    def parse_command_line(self, argv=None):
+        """Parse the jhubctl command line arguments.
+        
+        This overwrites traitlets' default `parse_command_line` method
+        and tailors it to jhubctl's needs.
+        """
+        argv = sys.argv[1:] if argv is None else argv
+        self.argv = [py3compat.cast_unicode(arg) for arg in argv]
+
+        if argv and argv[0] == 'help':
+            # turn `ipython help notebook` into `ipython notebook -h`
+            argv = argv[1:] + ['-h']
+
         # Append Provider Class to the list of configurable items.
         ProviderClass = getattr(providers, self.provider_type)
         self.classes.append(ProviderClass)
 
-        # If a help command is found, print help and exit.
-        if help_arg:
-            self.print_help(arg == '--help-all')
+        # Arguments after a '--' argument are for the script IPython may be
+        # about to run, not IPython iteslf. For arguments parsed here (help and
+        # version), we want to only search the arguments up to the first
+        # occurrence of '--', which we're calling interpreted_argv.
+        try:
+            interpreted_argv = argv[:argv.index('--')]
+        except ValueError:
+            interpreted_argv = argv
+
+        if any(x in interpreted_argv for x in ('-h', '--help-all', '--help')):
+            self.print_help('--help-all' in interpreted_argv)
+            self.exit(0)
+
+        if '--version' in interpreted_argv or '-V' in interpreted_argv:
+            self.print_version()
             self.exit(0)
 
         # If not config, parse commands.
         ## Run sanity checks.
-
         # Check that the minimum number of arguments have been called.
         if len(self.argv) < 2:
             raise JhubctlError(
@@ -92,9 +145,9 @@ class JhubCtl(Application):
 
         # Check action
         self.resource_action = self.argv[0]
-        if self.resource_action not in self.actions:
+        if self.resource_action not in self.subcommands:
             raise JhubctlError(
-                f"Subcommand is not recognized; must be one of these: {self.actions}")
+                f"Subcommand is not recognized; must be one of these: {self.subcommands}")
 
         # Check resource
         self.resource_type = self.argv[1]
@@ -114,8 +167,22 @@ class JhubCtl(Application):
                     "Expected: jhubctl <action> <resource> <name>")
             else:
                 self.resource_name = None
-        
-        # Get resource.
+
+        # flatten flags&aliases, so cl-args get appropriate priority:
+        flags, aliases = self.flatten_flags()
+        loader = KVArgParseConfigLoader(argv=argv, aliases=aliases,
+                                        flags=flags, log=self.log)
+        config = loader.load_config()
+        self.update_config(config)
+        # store unparsed args in extra_args
+        self.extra_args = loader.extra_args
+
+    def initialize(self):
+        """Handle specific configurations."""
+        # Parse configuration items on command line.
+        self.parse_command_line()
+
+        # Initialize objects to interact with.
         self.kubeconf = KubeConf()
         self.cluster_list = ClusterList(kubeconf=self.kubeconf)
         self.hub_list = HubList(kubeconf=self.kubeconf)
@@ -127,8 +194,9 @@ class JhubCtl(Application):
         resource_action = getattr(resource_list, self.resource_action)
         resource_action(self.resource_name)
 
+
 def main():
-    app = JhubCtl()
+    app = JhubctlApp()
     app.initialize()
     app.start()
 

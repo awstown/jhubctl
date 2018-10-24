@@ -413,7 +413,7 @@ class AwsEKS(Provider):
     def get_storage_config(self):
         """"""
         return self.get_template(
-            'amazon-efs-provisioner.yaml',
+            'amazon-storage-class.yaml',
             arn=self.node_arn,
             users=self.admins
         )

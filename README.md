@@ -1,5 +1,6 @@
 # jhubctl
-CLI utility for creating and manage multiple JupyterHub deployments
+
+**A familiar CLI for managing JupyterHub deployments on Kubernetes clusters.**
 
 WARNING: Still under active development! Does not work yet.
 

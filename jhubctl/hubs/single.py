@@ -4,7 +4,7 @@ from jhubctl.utils import helm, kubectl
 from traitlets.config import Configurable
 from traitlets import Unicode
 
-class SingleHub(Configurable):
+class Hub(Configurable):
     """Single instance of a JupyterHub deployment.
     """
     helm_repo = Unicode(
@@ -22,8 +22,12 @@ class SingleHub(Configurable):
     ).tag(config=True)
 
     namespace = Unicode(
-        help="Name of the namespace"
-    ).tag(config=True)
+        help="Name of the Kubernetes namespace."
+    )
+
+    def __init__(self, namespace, **traits):
+        self.namespace = namespace
+        super().__init__(**traits)
 
     def get_security_yaml(self):
         """Create security YAML data."""
@@ -35,6 +39,15 @@ class SingleHub(Configurable):
 
     def create(self):
         """Create a single instance of notebook."""
+        # Point to chart repo.
+        helm(
+            "repo"
+            "add",
+            "jupyterhub",
+            self.helm_repo
+        )
+        helm("repo", "update")
+        
         # Get token to secure Jupyterhub
         secret_yaml = self.get_security_yaml()
 
@@ -48,8 +61,6 @@ class SingleHub(Configurable):
             version=self.version,
             config_yaml=secret_yaml
         )
-
-        
 
     def delete(self):
         """Delete a Jupyterhub"""
