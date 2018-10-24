@@ -1,7 +1,8 @@
-from ..utils import SubclassError
+from ...utils import SubclassError
 from traitlets.config import Configurable
 from traitlets import (
-    Unicode
+    Unicode,
+    Dict
 )
 
 class Provider(Configurable):
@@ -11,6 +12,14 @@ class Provider(Configurable):
     provider_type = Unicode(help="Provider type")
     provider_alias = Unicode(help="Simple alias pointing to this provider.")
     cluster_name = Unicode(help="Name of cluster.")
+    
+    @property
+    def kube_user_data(self):
+        """Extra data to pass to the kubectl user for this cluster.
+        
+        This can be used to map extra data to clusters in the kubeconf file.
+        """
+        return None
 
     def __init__(self, name, **traits):
         self.name = name

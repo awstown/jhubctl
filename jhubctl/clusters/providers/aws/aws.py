@@ -14,7 +14,7 @@ from traitlets import (
     default
 )
 from ..base import Provider
-from ...utils import get_template, external_cli, kubectl
+from ....utils import get_template, external_cli, kubectl
 
 
 CLIENT = boto3.client('cloudformation')
@@ -233,6 +233,20 @@ class AwsEKS(Provider):
     def utilities_stack(self):
         return get_stack(self.utilities_name)
 
+    @property
+    def kube_user_data(self):
+        """Extra data to pass to the kubectl user for this cluster.
+        
+        This can be used to map extra data to clusters in the kubeconf file.
+        """
+        return {
+            'exec': {
+                'apiVersion': 'client.authentication.k8s.io/v1alpha1',
+                'command': 'aws-iam-authenticator',
+                'args': ["token", "-i", f"{self.cluster_name}"]
+            }
+        }
+
     # ------------------------------------------------------------------------
     # Methods
     # ------------------------------------------------------------------------
@@ -248,7 +262,6 @@ class AwsEKS(Provider):
             (self.create_node_group, (), {}),
             (self.create_spot_nodes, (), {}),
             (self.create_utilities, (), {}),
-            (self.create_kubeconfig, (), {})
         ]
         # Execute creation.
         for step in tqdm.tqdm(steps, ncols=70):
@@ -383,11 +396,6 @@ class AwsEKS(Provider):
             )
         )
 
-    def create_kubeconfig(self):
-        """Add a configuration to your kubeconfig
-        """
-        aws_cli('eks', 'update-kubeconfig', name=self.name)
-
     def get_template(self, template_name,**parameters):
         """"""
         template_path = pathlib.Path(self.template_dir).joinpath(template_name)
@@ -408,12 +416,4 @@ class AwsEKS(Provider):
             'amazon-efs-provisioner.yaml',
             arn=self.node_arn,
             users=self.admins
-        )
-
-    def get_kube_config(self):
-        return self.get_template(
-            'amazon-kubeconfig.yaml',
-            endpoint_url=self.endpoint_url,
-            ca_cert=self.ca_cert,
-            cluster_name=self.cluster_name
         )

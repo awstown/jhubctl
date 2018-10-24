@@ -24,9 +24,9 @@ def external_cli(name):
         if config_yaml is not None:
             line = ["echo", config_yaml, "|"] + line + ["-f", "-"]
         # Return output if anything is returned from subprocess.
-        output = subprocess.run(line)  # , capture_output=True)
+        output = subprocess.run(line, capture_output=True)
         if output.stdout is not None:
-            return output.stdout.decode('utf-8')
+            return output.stdout
 
     return command
 

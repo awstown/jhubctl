@@ -15,8 +15,9 @@ from traitlets import (
 from kubeconf import KubeConf
 
 from .utils import JhubctlError
-from . import providers
+from .clusters import providers, ClusterList
 from .hubs import HubList
+
 
 
 def exception_handler(exception_type, exception, traceback):
@@ -69,9 +70,11 @@ class JhubCtl(Application):
         # # Parse configuration items on command line.
         self.parse_command_line()
 
+        # ADD SERVER CLASS TO OUR LIST OF CLASSES THAT ARE CONFIGURABLE.
+        # THIS SI A HACK RIGHT NOW, NEED TO FIGURE THIS OUT.
         # Append Provider Class to the list of configurable items.
-        self.ProviderClass = getattr(providers, self.provider_type)
-        self.classes.append(self.ProviderClass)
+        ProviderClass = getattr(providers, self.provider_type)
+        self.classes.append(ProviderClass)
 
         # If a help command is found, print help and exit.
         if help_arg:
@@ -82,7 +85,7 @@ class JhubCtl(Application):
         ## Run sanity checks.
 
         # Check that the minimum number of arguments have been called.
-        if len(self.argv) < 3:
+        if len(self.argv) < 2:
             raise JhubctlError(
                 "Not enough arguments. \n\n"
                 "Expected: jhubctl <action> <resource> <name>")
@@ -102,21 +105,27 @@ class JhubCtl(Application):
             )
 
         # Get name of resource.
-        self.resource_name = self.argv[2]
-
+        try:
+            self.resource_name = self.argv[2]
+        except IndexError:
+            if self.resource_action != "get":
+                raise JhubctlError(
+                    "Not enough arguments. \n\n"
+                    "Expected: jhubctl <action> <resource> <name>")
+            else:
+                self.resource_name = None
+        
         # Get resource.
-        self.cluster = self.ProviderClass
-        self.hub = HubList
+        self.kubeconf = KubeConf()
+        self.cluster_list = ClusterList(kubeconf=self.kubeconf)
+        self.hub_list = HubList(kubeconf=self.kubeconf)
 
     def start(self):
         """Execution happening on jhubctl."""
         # Get specified resource.
-        Resource = getattr(self, self.resource_type)
-        self.resource = Resource(name=self.resource_name, ssh_key_name='zsailer')
-        self.action = getattr(self.resource, self.resource_action)
-
-        # Execute action
-        self.action()
+        resource_list = getattr(self, f'{self.resource_type}_list')
+        resource_action = getattr(resource_list, self.resource_action)
+        resource_action(self.resource_name)
 
 def main():
     app = JhubCtl()
