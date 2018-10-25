@@ -8,31 +8,53 @@ class SubclassError(Exception):
 class JhubctlError(Exception):
     """CLI exceptions"""
 
-def external_cli(name):
-    """Build a wrapper for external subprocess command."""
 
-    def command(*args, config_yaml=None, **options):
-        f"""Runs a {name} command and returns the stdout as a string
-        """
-        line = [name] + list(args)
-        for key, value in options.items():
-            if len(key) == 1:
-                line += [f"-{key}", value]
-            else:
-                line += [f"--{key}", value]
-        # Add yaml string as input to command
-        if config_yaml is not None:
-            line = ["echo", config_yaml, "|"] + line + ["-f", "-"]
-        # Return output if anything is returned from subprocess.
-        output = subprocess.run(line, capture_output=True)
-        if output.stdout is not None:
-            return output.stdout
-
-    return command
+def get_flag_args(**options):
+    """Build a list of flags."""
+    flags = []
+    for key, value in options.items():
+        # Build short flags.
+        if len(key) == 1:
+            flag = f'-{key}'
+        # Built long flags.
+        else:
+            flag = f'--{key}'
+        flags = flags + [flag, value]
+    return flags
 
 
-kubectl = external_cli("kubectl")
-helm = external_cli("helm")
+def kubectl(*args, input=None, **flags):
+    """Simple wrapper to kubectl."""
+    # Build command line call.
+    line = ['kubectl'] + list(args)
+    line = line + get_flag_args(**flags)
+    if input is not None:
+        line = line + ['-f', '-']
+    # Run subprocess
+    output = subprocess.run(
+        line,
+        input=input,
+        capture_output=True,
+        text=True
+    )
+    return output
+
+
+def helm(*args, input=None, **flags):
+    """Simple wrapper to helm."""
+    # Build command line call.
+    line = ['helm'] + list(args)
+    line = line + get_flag_args(**flags)
+    if input is not None:
+        line = line + ['-f', '-']
+    # Run subprocess
+    output = subprocess.run(
+        line,
+        input=input,
+        capture_output=True,
+        text=True
+    )
+    return output
 
 
 def sanitize_path(path):

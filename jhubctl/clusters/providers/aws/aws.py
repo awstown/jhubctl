@@ -14,7 +14,7 @@ from traitlets import (
     default
 )
 from ..base import Provider
-from ....utils import get_template, external_cli, kubectl
+from ....utils import get_template
 
 
 CLIENT = boto3.client('cloudformation')
@@ -24,7 +24,6 @@ CLOUDFORMATION = boto3.resource('cloudformation')
 IAM = boto3.client('iam')
 EKS = boto3.client('eks')
 
-aws_cli = external_cli('aws')
 
 def stack_exists(name):
     """Use boto3 to check if a resource exists."""
@@ -397,13 +396,14 @@ class AwsEKS(Provider):
         )
 
     def get_template(self, template_name,**parameters):
-        """"""
+        """Pull templates from the AWS templates folder"""
         template_path = pathlib.Path(self.template_dir).joinpath(template_name)
         return get_template(template_path, **parameters)
         
-
     def get_auth_config(self):
-        """"""
+        """Return the Authorization Config Map (in yaml format) 
+        for this cluster.
+        """
         return self.get_template(
             'amazon-auth-cm.yaml',
             arn=self.node_arn,
@@ -411,9 +411,7 @@ class AwsEKS(Provider):
         )
 
     def get_storage_config(self):
-        """"""
-        return self.get_template(
-            'amazon-storage-class.yaml',
-            arn=self.node_arn,
-            users=self.admins
-        )
+        """Return the Storage configuration (in yaml format) 
+        for this cluster.
+        """
+        return self.get_template('amazon-storage-class.yaml')

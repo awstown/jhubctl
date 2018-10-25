@@ -2,7 +2,7 @@ import secrets
 
 from jhubctl.utils import helm, kubectl
 from traitlets.config import Configurable
-from traitlets import Unicode
+from traitlets import default, Unicode
 
 class Hub(Configurable):
     """Single instance of a JupyterHub deployment.
@@ -15,6 +15,10 @@ class Hub(Configurable):
     release = Unicode(
         help="Release name"
     ).tag(config=True)
+
+    @default('release')
+    def _default_release(self):
+        return self.namespace
 
     version = Unicode(
         u'0.7.0',
@@ -40,27 +44,31 @@ class Hub(Configurable):
     def create(self):
         """Create a single instance of notebook."""
         # Point to chart repo.
-        helm(
-            "repo"
+        out = helm(
+            "repo",
             "add",
             "jupyterhub",
             self.helm_repo
         )
-        helm("repo", "update")
-        
+        print(out)
+        out = helm("repo", "update")
+        print(out)
+
         # Get token to secure Jupyterhub
         secret_yaml = self.get_security_yaml()
 
         # Get Jupyterhub.
-        helm(
+        out = helm(
             "upgrade",
             "--install",
             self.release,
             "jupyterhub/jupyterhub",
             namespace=self.namespace,
             version=self.version,
-            config_yaml=secret_yaml
+            input=secret_yaml
         )
+        print(out)
 
     def delete(self):
-        """Delete a Jupyterhub"""
+        """Delete a Jupyterhub."""
+        
