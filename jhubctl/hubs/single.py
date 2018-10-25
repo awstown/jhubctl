@@ -4,6 +4,7 @@ from jhubctl.utils import helm, kubectl
 from traitlets.config import Configurable
 from traitlets import default, Unicode
 
+
 class Hub(Configurable):
     """Single instance of a JupyterHub deployment.
     """
@@ -109,3 +110,44 @@ class Hub(Configurable):
             print(out.stderr)
         else:
             print(out.stdout)
+
+    def _get_description_message(self):
+        """Get a description message."""
+        # Describe cluster.
+        out = kubectl(
+            "describe",
+            "services",
+            "proxy-public",
+            namespace=self.namespace
+        )
+        return out.stdout
+
+    def _parse_description(self, description_text):
+        """Turn description to dictionary."""
+        text = description_text
+        text = text.strip()
+        lines = text.split('\n')
+
+        data = {}
+        for line in lines:
+            if ":" in line:
+                idx = line.index(":")
+                key = line[:idx]
+                value = line[idx+1:].lstrip().rstrip()
+                data[key] = value
+            else:
+                if isinstance(value, list) is False:
+                    value = [value]
+                value.append(line.lstrip().rstrip())
+                data[key] = value
+        return data
+
+    def get_description(self):
+        """Get description (as dictionary)"""
+        message = self._get_description_message()
+        data = self._parse_description(message)
+        return data
+
+    def describe(self):
+        """Describe jupyterhub pod."""
+        print(self._get_description_message())
