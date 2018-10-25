@@ -1,18 +1,44 @@
+import pathlib
 from ...utils import SubclassError
 from traitlets.config import Configurable
 from traitlets import (
     Unicode,
-    Dict
+    Dict,
+    default
 )
 
 class Provider(Configurable):
-    """Base class for cloud providers supporting Kubernetes.
-    """
+    """Base class for Kubernetes Cluster providers.
 
+    To create a new provider, inherit this class and 
+    replace the folowing traits and methods with the 
+    logic that is appropriate for the provider.
+
+    We recommend creating a new folder for that provider
+    where all templates can be grouped.
+    """
+    # Specific type of the provider
     provider_type = Unicode(help="Provider type")
+
+    # An alias for the provider. No spaces or hyphens. Underscores instead.
     provider_alias = Unicode(help="Simple alias pointing to this provider.")
     cluster_name = Unicode(help="Name of cluster.")
-    
+
+    # Path to templates for this provider.
+    template_dir = Unicode(
+        help="Path to template"
+    ).tag(config=True)
+
+    @default('template_dir')
+    def _default_template_dir(self):
+        cwd = pathlib.Path(__file__).parent
+        template_dir = cwd.joinpath('templates')
+        return str(template_dir)
+
+    ssh_key_name = Unicode(
+        help='User SSH key name'
+    ).tag(config=True)
+
     @property
     def kube_user_data(self):
         """Extra data to pass to the kubectl user for this cluster.
@@ -28,30 +54,25 @@ class Provider(Configurable):
     def check_if_cluster_is_deployed(self):
         """Returns True if the cluster is deployed and available.
         """
-        raise SubclassError
+        raise SubclassError("Must be implemented in a subclass.")
 
     def create(self):
         """Deploy a cluster configured for running Jupyterhub
         deployments on this provider.
         """
-        raise SubclassError
+        raise SubclassError("Must be implemented in a subclass.")
 
     def delete(self):
         """Teardown a cluster running on this provider.
         """
-        raise SubclassError
+        raise SubclassError("Must be implemented in a subclass.")
 
-    def get_authorized_users_config(self):
+    def get_auth_config(self):
         """Get yaml describing authorized users for the cluster.
         """
-        raise SubclassError
+        raise SubclassError("Must be implemented in a subclass.")
 
     def get_storage_config(self):
         """Get yaml describing storage on cluster.
         """
-        raise SubclassError
-
-    def get_kubectl_config(self):
-        """Get yaml describing the kubeconfig for this cluster.
-        """
-        raise SubclassError
+        raise SubclassError("Must be implemented in a subclass.")

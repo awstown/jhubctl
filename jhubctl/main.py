@@ -92,8 +92,8 @@ class JhubctlApp(Application):
         lines.append('-'*len(lines[-1]))
         lines.append('')
 
-        for subcommand in self.subcommands:
-            lines.append(subcommand[0])
+        for name, subcommand in self.subcommands.items():
+            lines.append(name)
             lines.append(indent(subcommand[1]))
 
         lines.append('')

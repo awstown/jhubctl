@@ -90,17 +90,6 @@ class AwsEKS(Provider):
     provider_source = Unicode('Amazon Web Services EKS')
     provider_alias = Unicode('aws')
 
-    # Path to templates for this provider.
-    template_dir = Unicode(
-        help="Path to template"
-    ).tag(config=True)
-
-    @default('template_dir')
-    def _default_template_dir(self):
-        cwd = pathlib.Path(__file__).parent
-        template_dir = cwd.joinpath('templates')
-        return str(template_dir)
-
     # AWS Role NAme
     role_name = Unicode(
         help="AWS Role."
@@ -152,10 +141,6 @@ class AwsEKS(Provider):
     @default('utilities_name')
     def _default_utilities_name(self):
         return f'{self.name}-utilities'
-
-    ssh_key_name = Unicode(
-        help='User SSH key name'
-    ).tag(config=True)
 
     # ------------------------------------------------------------------------
     # Provider Attributes
@@ -281,6 +266,27 @@ class AwsEKS(Provider):
         for stack in tqdm.tqdm(stacks, ncols=70):
             self.delete_stack(stack)
 
+    def get_auth_config(self):
+        """Return the Authorization Config Map (in yaml format) 
+        for this cluster.
+        """
+        return self.get_template(
+            'amazon-auth-cm.yaml',
+            arn=self.node_arn,
+            users=self.admins
+        )
+
+    def get_storage_config(self):
+        """Return the Storage configuration (in yaml format) 
+        for this cluster.
+        """
+        return self.get_template('amazon-storage-class.yaml')
+
+    def get_template(self, template_name, **parameters):
+        """Pull templates from the AWS templates folder"""
+        template_path = pathlib.Path(self.template_dir).joinpath(template_name)
+        return get_template(template_path, **parameters)
+
     def delete_stack(self, stack_name):
         """Teardown a stack."""
         get_stack(stack_name)
@@ -394,24 +400,3 @@ class AwsEKS(Provider):
                 NodeSecurityGroup=self.node_security_group
             )
         )
-
-    def get_template(self, template_name,**parameters):
-        """Pull templates from the AWS templates folder"""
-        template_path = pathlib.Path(self.template_dir).joinpath(template_name)
-        return get_template(template_path, **parameters)
-        
-    def get_auth_config(self):
-        """Return the Authorization Config Map (in yaml format) 
-        for this cluster.
-        """
-        return self.get_template(
-            'amazon-auth-cm.yaml',
-            arn=self.node_arn,
-            users=self.admins
-        )
-
-    def get_storage_config(self):
-        """Return the Storage configuration (in yaml format) 
-        for this cluster.
-        """
-        return self.get_template('amazon-storage-class.yaml')

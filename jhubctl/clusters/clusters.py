@@ -1,11 +1,9 @@
 import pprint
-from traitlets.config import Configurable
 from . import providers
-
 from jhubctl.utils import kubectl, helm, JhubctlError
 
 
-class ClusterList(Configurable):
+class ClusterList(object):
     """Class for managing a Kubernetes Clusters.
 
     This class manages your configuration for kubectl.

@@ -1,25 +1,35 @@
 
 from ..utils import kubectl, helm
-from traitlets.config import Configurable
-from traitlets import (
-    Unicode,
-    default
-)
-
 from .single import Hub
 
-class HubList(Configurable):
-    """JupyterHub.
+class HubList(object):
+    """Manage a list of jhubctl.
     """
-
     def create(self, name):
         """Create a jupyterhub deployment on the cluster."""
         hub = Hub(namespace=name)
         hub.create()
 
     def get(self, name=None):
-        """List all jupyterHubs.
+        """Print a list of all jupyterHubs.
         """
+        if name is None:
+            print("Running Jupyterhub Deployments (by name):")
+            output = helm(
+                'list',
+                '-q'
+            )
+            if output.returncode != 0:
+                print("Something went wrong!")
+                print(output.stderr)
+            else:
+                names = output.stdout.strip().split('\n')
+                for name in names:
+                    print(f"  - {name}")
+
+        else:
+            hub = Hub(namespace=name)
+            hub.get()
         
     def delete(self, name):
         """Delete Hub from Kubernetes Cluster

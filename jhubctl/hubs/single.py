@@ -29,8 +29,10 @@ class Hub(Configurable):
         help="Name of the Kubernetes namespace."
     )
 
-    def __init__(self, namespace, **traits):
+    def __init__(self, namespace, release=None, **traits):
         self.namespace = namespace
+        if release is None:
+            self.release = namespace
         super().__init__(**traits)
 
     def get_security_yaml(self):
@@ -41,6 +43,15 @@ class Hub(Configurable):
         yaml = f'proxy:\n  secretToken: "{token}"'
         return yaml
 
+    def get(self):
+        """Get specific information about this hub."""
+        output = helm("get", self.release)
+        if output.returncode != 0:
+            print("Something went wrong!")
+            print(output.stderr)
+        else:
+            print(output.stdout)
+
     def create(self):
         """Create a single instance of notebook."""
         # Point to chart repo.
@@ -50,9 +61,7 @@ class Hub(Configurable):
             "jupyterhub",
             self.helm_repo
         )
-        print(out)
         out = helm("repo", "update")
-        print(out)
 
         # Get token to secure Jupyterhub
         secret_yaml = self.get_security_yaml()
@@ -67,8 +76,31 @@ class Hub(Configurable):
             version=self.version,
             input=secret_yaml
         )
-        print(out)
+        if out.returncode != 0:
+            print(out.stderr)
+        else:
+            print(out.stdout)
 
     def delete(self):
         """Delete a Jupyterhub."""
-        
+        # Delete the Helm Release
+        out = helm(
+            "delete",
+            self.release,
+            "--purge"
+        )
+        if out.returncode != 0:
+            print(out.stderr)
+        else:
+            print(out.stdout)
+
+        # Delete the Kubernetes namespace
+        out = kubectl(
+            "delete",
+            "namespace",
+            self.namespace
+        )
+        if out.returncode != 0:
+            print(out.stderr)
+        else:
+            print(out.stdout)
