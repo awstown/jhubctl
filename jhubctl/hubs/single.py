@@ -7,11 +7,14 @@ from traitlets import default, Unicode
 class Hub(Configurable):
     """Single instance of a JupyterHub deployment.
     """
+    # Helm repository to pull charts.
     helm_repo = Unicode(
         u'https://jupyterhub.github.io/helm-chart/',
         help="Jupyterhub Helm Chart repo."
     ).tag(config=True)
 
+    # Helm chart release name. If not given, use the 
+    # namespace as the release name.
     release = Unicode(
         help="Release name"
     ).tag(config=True)
@@ -20,14 +23,16 @@ class Hub(Configurable):
     def _default_release(self):
         return self.namespace
 
+    # Helm chart version to pull.
     version = Unicode(
         u'0.7.0',
         help='Helm Chart for Jupyterhub release.'
     ).tag(config=True)
 
+    # Name to give to namespace.
     namespace = Unicode(
         help="Name of the Kubernetes namespace."
-    )
+    ).tag(config=True)
 
     def __init__(self, namespace, release=None, **traits):
         self.namespace = namespace

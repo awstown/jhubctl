@@ -38,9 +38,28 @@ def exception_handler(exception_type, exception, traceback):
 
 
 class JhubctlApp(Application):
-    """Main application for deploying jupyterhub on cloud services.
-    """
+    """A traitlets application that deploys jupyterhub on Kubernetes clusters.
 
+    Example call:
+        $ jhubctl create hub "my_hub" 
+
+    JhubctlApp manages both clusters and jupyterhub deployments through
+    a single interface. 
+
+    Subcommands: 
+    
+        $ jhubctl get <resource> <name> : List a named resource found in kubeconfig.
+        $ jhubctl get <resource> : List all resources found in kubeconfig.
+        $ jhubctl create <resource> <name> : Create a resource with the given name.
+        $ jhubctl delete <resource> <name> : Delete a resource with the given name.
+    
+
+    JhubctlApp is configurable through traitlets config system. Configurable traits
+    can be set at the command line or in a config file. To generate a config 
+    template, use the following flag:
+
+        $ jhubctl --generate-config
+    """
     # Name of the commandline application
     name = Unicode(u'jhubctl')
 

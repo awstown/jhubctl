@@ -3,7 +3,13 @@ from ..utils import kubectl, helm
 from .single import Hub
 
 class HubList(object):
-    """Manage a list of jhubctl.
+    """A class to manage many Jupyterhub deployments.
+
+    Parameter
+    ---------
+    kubeconf : KubeConf object
+        A KubeConf object for managing the kubeconfig
+        on the current system.
     """
     def __init__(self, kubeconf):
         self.kubeconf = kubeconf
