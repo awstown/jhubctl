@@ -78,8 +78,16 @@ class JhubctlApp(Application):
     resources = List([
         'cluster',
         'hub',
-        'ng'
     ])
+
+    # Name of the configuration file to read.
+    config_file = Unicode(
+        help="Name of configuration file."
+    ).tag(config=True)
+
+    @default('config_file')
+    def _default_config_file(self):
+        return u"jhubctl_config.py"
 
     def print_subcommands(self):
         """Print the subcommand part of the help."""
@@ -99,7 +107,6 @@ class JhubctlApp(Application):
         lines.append('')
         print(os.linesep.join(lines))
 
-
     @catch_config_error
     def parse_command_line(self, argv=None):
         """Parse the jhubctl command line arguments.
@@ -110,29 +117,23 @@ class JhubctlApp(Application):
         argv = sys.argv[1:] if argv is None else argv
         self.argv = [py3compat.cast_unicode(arg) for arg in argv]
 
-        if argv and argv[0] == 'help':
-            # turn `ipython help notebook` into `ipython notebook -h`
-            argv = argv[1:] + ['-h']
-
         # Append Provider Class to the list of configurable items.
         ProviderClass = getattr(providers, self.provider_type)
         self.classes.append(ProviderClass)
 
-        # Arguments after a '--' argument are for the script IPython may be
-        # about to run, not IPython iteslf. For arguments parsed here (help and
-        # version), we want to only search the arguments up to the first
-        # occurrence of '--', which we're calling interpreted_argv.
-        try:
-            interpreted_argv = argv[:argv.index('--')]
-        except ValueError:
-            interpreted_argv = argv
-
-        if any(x in interpreted_argv for x in ('-h', '--help-all', '--help')):
-            self.print_help('--help-all' in interpreted_argv)
+        if any(x in self.argv for x in ('-h', '--help-all', '--help')):
+            self.print_help('--help-all' in self.argv)
             self.exit(0)
 
-        if '--version' in interpreted_argv or '-V' in interpreted_argv:
+        if '--version' in self.argv or '-V' in self.argv:
             self.print_version()
+            self.exit(0)
+
+        # Generate a configuration file if flag is given.
+        if '--generate-config' in self.argv:
+            conf = self.generate_config_file()
+            with open(self.config_file, 'w') as f:
+                f.write(conf)
             self.exit(0)
 
         # If not config, parse commands.
@@ -177,10 +178,12 @@ class JhubctlApp(Application):
         # store unparsed args in extra_args
         self.extra_args = loader.extra_args
 
-    def initialize(self):
+    def initialize(self, argv=None):
         """Handle specific configurations."""
         # Parse configuration items on command line.
-        self.parse_command_line()
+        self.parse_command_line(argv)
+        if self.config_file:
+            self.load_config_file(self.config_file)
 
         # Initialize objects to interact with.
         self.kubeconf = KubeConf()
@@ -199,7 +202,6 @@ def main():
     app = JhubctlApp()
     app.initialize()
     app.start()
-
 
 
 if __name__ == "__main__":

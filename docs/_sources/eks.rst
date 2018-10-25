@@ -5,6 +5,8 @@ AWS Elastic Kubernetes Cluster
 
 .. _`Amazon EKS`: https://aws.amazon.com/eks/
 
-How to setup up EKS
--------------------
+Setup
+-----
 
+Install AWS
+-----------

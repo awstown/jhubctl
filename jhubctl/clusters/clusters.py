@@ -8,9 +8,8 @@ class ClusterList(object):
 
     This class manages your configuration for kubectl.
     """
-    def __init__(self, kubeconf=None, **traits):
+    def __init__(self, kubeconf):
         self.kubeconf = kubeconf
-        super().__init__(**traits)
 
     def check_cluster_exists(self, name):
         """Check if cluster exists. If it does not, raise exception."""
@@ -31,7 +30,7 @@ class ClusterList(object):
         self.kubeconf.open()
         if name is None:
             clusters = self.kubeconf.get_clusters()
-            print("Clusters:")
+            print("Running Clusters:")
             for cluster in clusters:
                 print(f"  - {cluster['name']}")
         else:

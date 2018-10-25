@@ -71,7 +71,7 @@ Follow one of these pages to setup your command line.
    :caption: Contents:
 
    _sources/eks.rst
-
+   _sources/config.rst
 
 Indices and tables
 ==================

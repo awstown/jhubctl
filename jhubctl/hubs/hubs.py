@@ -5,6 +5,9 @@ from .single import Hub
 class HubList(object):
     """Manage a list of jhubctl.
     """
+    def __init__(self, kubeconf):
+        self.kubeconf = kubeconf
+
     def create(self, name):
         """Create a jupyterhub deployment on the cluster."""
         hub = Hub(namespace=name)
