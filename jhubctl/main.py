@@ -1,186 +1,228 @@
+import sys
 import os
-import click
-import logging
-import click_log
+import re
+from copy import deepcopy 
 
-from . import aws
-from . import kube
-from . import hub
+from ipython_genutils.text import indent
+from ipython_genutils import py3compat
 
-from .teardown import (
-    teardown_jupyterhub_role,
-    teardown_jupyterhub_vpc,
-    teardown_jupyterhub_cluster,
-    teardown_ondemand_workers,
-    teardown_spot_instances
+from traitlets.config.loader import (
+    KVArgParseConfigLoader, PyFileConfigLoader, Config, ArgumentError, ConfigFileNotFound, JSONFileConfigLoader
+)
+from traitlets.config import (
+    Application, 
+    Configurable, 
+    catch_config_error
 )
 
-# Configure logging
-logger = logging.getLogger(__name__)
-click_log.basic_config(logger)
+from traitlets import (
+    default,
+    observe,
+    Unicode,
+    List,
+    Dict
+)
 
-@click.group()
-@click_log.simple_verbosity_option(logger)
-def cli():
-    """jhubctl controls multiple Jupyterhub/EKS clusters."""
+from kubeconf import KubeConf
 
-@cli.group()
-@click_log.simple_verbosity_option(logger)
-def create():
-    """Create an EKS Jupyterhub cluster."""
+from .utils import JhubctlError
+from .clusters import providers, ClusterList
+from .hubs import HubList, Hub
 
-@create.command("cluster")
-@click.argument("cluster_name")
-def create_cluster(cluster_name):
-    """Create an Jupyterhub/EKS cluster.
+
+def exception_handler(exception_type, exception, traceback):
+    """Handle jhubctl exceptions"""
+    print(f'{exception_type.__name__}: {exception}')
+
+#sys.excepthook = exception_handler
+
+
+class JhubctlApp(Application):
+    """A traitlets application that deploys jupyterhub on Kubernetes clusters.
+
+    Example call:
+        $ jhubctl create hub "my_hub" 
+
+    JhubctlApp manages both clusters and jupyterhub deployments through
+    a single interface. 
+
+    Subcommands: 
+    
+        $ jhubctl get <resource> <name> : List a named resource found in kubeconfig.
+        $ jhubctl get <resource> : List all resources found in kubeconfig.
+        $ jhubctl create <resource> <name> : Create a resource with the given name.
+        $ jhubctl delete <resource> <name> : Delete a resource with the given name.
+    
+
+    JhubctlApp is configurable through traitlets config system. Configurable traits
+    can be set at the command line or in a config file. To generate a config 
+    template, use the following flag:
+
+        $ jhubctl --generate-config
     """
+    # Name of the commandline application
+    name = Unicode(u'jhubctl')
 
-    # Deploy the role.
-    role_name = f"{cluster_name}-role"
-    vpc_name = f"{cluster_name}-vpc"
-    cluster_name = f"{cluster_name}-cluster"
-    workers_name = f"{cluster_name}-ondemand-workers"
-    spot_instances_name = f"{cluster_name}-spot-nodes"
-    utilities_name = f"{cluster_name}-utilities"
+    # Documentation used at the top of the CLI help.
+    description = Unicode(
+        u"A familiar CLI for managing JupyterHub "
+        u"deployments on Kubernetes clusters."
+    )
+
+    # Printed examples for the help.
+    examples = Unicode(
+        u" > jhubctl create hub myhub"
+    )
+
+    # Classes to expose to the config system
+    classes = List([
+        KubeConf,
+        Hub
+    ])
+
+    # Provider to configure.
+    provider_type = Unicode(
+        u'AwsEKS',
+        help="Provider type."
+    ).tag(config=True)
+    
+    # Subcommands allowed by application.
+    subcommands = Dict({
+        'create': ((), 'Create a resource.'),
+        'delete': ((), 'Delete a resource.'),
+        'get': ((), 'List a resource or resources'),
+    })
+
+    # Resource that can be deployed and managed.
+    resources = List([
+        'cluster',
+        'hub',
+    ])
+
+    # Name of the configuration file to read.
+    config_file = Unicode(
+        help="Name of configuration file."
+    ).tag(config=True)
+
+    @default('config_file')
+    def _default_config_file(self):
+        return u"jhubctl_config.py"
+
+    def print_subcommands(self):
+        """Print the subcommand part of the help."""
+        lines = ["Call"]
+        lines.append('-'*len(lines[-1]))
+        lines.append('')
+        lines.append("> jhubctl <subcommand> <resource-type> <resource-name>")
+        lines.append('')
+        lines.append("Subcommands")
+        lines.append('-'*len(lines[-1]))
+        lines.append('')
+
+        for name, subcommand in self.subcommands.items():
+            lines.append(name)
+            lines.append(indent(subcommand[1]))
+
+        lines.append('')
+        print(os.linesep.join(lines))
+
+    @catch_config_error
+    def parse_command_line(self, argv=None):
+        """Parse the jhubctl command line arguments.
+        
+        This overwrites traitlets' default `parse_command_line` method
+        and tailors it to jhubctl's needs.
+        """
+        argv = sys.argv[1:] if argv is None else argv
+        self.argv = [py3compat.cast_unicode(arg) for arg in argv]
+
+        # Append Provider Class to the list of configurable items.
+        ProviderClass = getattr(providers, self.provider_type)
+        self.classes.append(ProviderClass)
+
+        if any(x in self.argv for x in ('-h', '--help-all', '--help')):
+            self.print_help('--help-all' in self.argv)
+            self.exit(0)
+
+        if '--version' in self.argv or '-V' in self.argv:
+            self.print_version()
+            self.exit(0)
+
+        # Generate a configuration file if flag is given.
+        if '--generate-config' in self.argv:
+            conf = self.generate_config_file()
+            with open(self.config_file, 'w') as f:
+                f.write(conf)
+            self.exit(0)
+
+        # If not config, parse commands.
+        ## Run sanity checks.
+        # Check that the minimum number of arguments have been called.
+        if len(self.argv) < 2:
+            raise JhubctlError(
+                "Not enough arguments. \n\n"
+                "Expected: jhubctl <action> <resource> <name>")
+
+        # Check action
+        self.resource_action = self.argv[0]
+        if self.resource_action not in self.subcommands:
+            raise JhubctlError(
+                f"Subcommand is not recognized; must be one of these: {self.subcommands}")
+
+        # Check resource
+        self.resource_type = self.argv[1]
+        if self.resource_type not in self.resources:
+            raise JhubctlError(
+                f"First argument after a subcommand must one of these"
+                f"resources: {self.resources}"
+            )
+
+        # Get name of resource.
+        try:
+            self.resource_name = self.argv[2]
+        except IndexError:
+            if self.resource_action != "get":
+                raise JhubctlError(
+                    "Not enough arguments. \n\n"
+                    "Expected: jhubctl <action> <resource> <name>")
+            else:
+                self.resource_name = None
+
+        # flatten flags&aliases, so cl-args get appropriate priority:
+        flags, aliases = self.flatten_flags()
+        loader = KVArgParseConfigLoader(argv=argv, aliases=aliases,
+                                        flags=flags, log=self.log)
+        config = loader.load_config()
+        self.update_config(config)
+        # store unparsed args in extra_args
+        self.extra_args = loader.extra_args
+
+    def initialize(self, argv=None):
+        """Handle specific configurations."""
+        # Parse configuration items on command line.
+        self.parse_command_line(argv)
+        if self.config_file:
+            self.load_config_file(self.config_file)
+
+        # Initialize objects to interact with.
+        self.kubeconf = KubeConf()
+        self.cluster_list = ClusterList(kubeconf=self.kubeconf)
+        self.hub_list = HubList(kubeconf=self.kubeconf)
+
+    def start(self):
+        """Execution happening on jhubctl."""
+        # Get specified resource.
+        resource_list = getattr(self, f'{self.resource_type}_list')
+        resource_action = getattr(resource_list, self.resource_action)
+        resource_action(self.resource_name)
 
 
-    with click.progressbar(length=9, label=f"Creating {cluster_name}...") as bar:
-
-        # 1. Create role.
-        role = aws.deploy_eks_role(role_name)
-        bar.update(1)
-
-        # 2. Create VPC.
-        security_groups, subnet_ids, vpc_ids = aws.deploy_vpc(vpc_name) 
-        bar.update(2)
-
-        # 3. Create cluster
-        endpoint_url, ca_cert = aws.deploy_cluster(
-            cluster_name=cluster_name,
-            security_groups=security_groups,
-            subnet_ids=subnet_ids,
-            vpc_ids=vpc_ids
-        )
-        bar.update(3)
-
-        # 4. Create workers.
-        node_arn, node_instance_profile, node_instance_role, node_security_group = aws.deploy_ondemand_workers(
-            workers_name,
-            cluster_name,
-            security_groups,
-            subnet_ids,
-            vpc_ids
-        )
-        bar.update(4)
-
-        # 5. Create spot instances
-        aws.deploy_spot_instances(
-            spot_instances_name,
-            cluster_name,
-            subnet_ids,
-            node_instance_profile,
-            node_instance_role,
-            node_security_group
-        )
-        bar.update(5)
-
-        # 6. Setup utilities.
-        efs_id = aws.deploy_utilities_stack(
-            utilities_name,
-            cluster_name,
-            subnet_ids,
-            node_security_group
-        )
-        bar.update(6)
-
-        # Generate aws-auth-cm.yaml and apply to cluster.
-        aws.write_auth_cm(node_arn)
-
-        # 
-        aws.write_efs_profivisioner(
-            cluster_name,
-            efs_id
-        )
-        bar.update(7)
-
-        # Configure Kubectl
-        kubectl_config_path = kube.write_kube_config(
-            cluster_name,
-            endpoint_url,
-            ca_cert
-        )
-
-        os.environ["KUBECONFIG"] = kubectl_config_path
-
-        kube.deploy_kube()
-        bar.update(8)
-
-        hub.deploy_jupyterhub()
-        bar.update(9)
+def main():
+    app = JhubctlApp()
+    app.initialize()
+    app.start()
 
 
-
-@cli.group()
-@click_log.simple_verbosity_option(logger)
-def delete():
-    """Delete an EKS Jupyterhub cluster."""
-
-
-@delete.command("cluster")
-@click.argument("cluster_name")
-def delete_cluster(cluster_name):
-    """"""
-    # Deploy the role.
-    role_name = f"{cluster_name}-role"
-    vpc_name = f"{cluster_name}-vpc"
-    cluster_name = f"{cluster_name}-cluster"
-    workers_name = f"{cluster_name}-ondemand-workers"
-    spot_instances_name = f"{cluster_name}-spot-nodes"
-    utilities_name = f"{cluster_name}-utilities"
-
-    with click.progressbar(length=5, label=f"Delete {cluster_name}...") as bar:
-
-        # 1. Teardown role.
-        teardown_jupyterhub_role(role_name)
-        bar.update(1)
-
-        # 2. Teardown VPC
-        teardown_jupyterhub_vpc(vpc_name)
-        bar.update(2)
-
-        # 3. Teardown Cluster
-        teardown_jupyterhub_cluster(cluster_name)
-        bar.update(3)
-
-        # 4. Teardown Workers
-        teardown_ondemand_workers(workers_name)
-        bar.update(4)
-
-        # 5. Teardown spot instances
-        teardown_spot_instances(spot_instances_name)
-        bar.update(5)
-
-
-
-
-@cli.group()
-@click_log.simple_verbosity_option(logger)
-def describe():
-    """Show details of a specific Jupyterhub deployment."""
-
-
-@cli.command("list")
-def list_clusters():
-    pass
-
-@cli.group()
-@click_log.simple_verbosity_option(logger)
-def config():
-    """Export kubeconfig file to home dir..."""
-
-@config.command("export-kubeconfig")
-@click.argument("cluster_name")
-def export_kubeconfig(cluster_name):
-    """Exports kubeconfig for cluster_name to ~/.kube/kubeconfig-<cluster_name>
-    """
+if __name__ == "__main__":
+    main()
 

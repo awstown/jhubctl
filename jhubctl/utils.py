@@ -1,99 +1,98 @@
-import os
-import json
+import jinja2
+import pathlib
 import subprocess
-import botocore
-from pathlib import Path, PurePath
+
+class SubclassError(Exception):
+    """Must be implemented in a subclass."""
+
+class JhubctlError(Exception):
+    """CLI exceptions"""
 
 
-def get_jhubctl_path():
-    home = Path.home()
-    jhubctl_path = PurePath.joinpath(home, ".jhubctl")
-    return jhubctl_path
-
-def create_jhubctl_dir():
-    jhubctl_path = get_jhubctl_path()
-    # Create directory if it doesn't exist.
-    if not os.path.exists(jhubctl_path):
-        os.makedirs(jhubctl_path)
-
-
-def get_deployment_path(cluster_name):
-    """Get the path to Jupyterhub deployment configuration."""
-    jhubctl_path = get_jhubctl_path()
-    deployment_path = PurePath.joinpath(jhubctl_path, f"{cluster_name}")
-    return deployment_path
+def get_flag_args(**options):
+    """Build a list of flags."""
+    flags = []
+    for key, value in options.items():
+        # Build short flags.
+        if len(key) == 1:
+            flag = f'-{key}'
+        # Built long flags.
+        else:
+            flag = f'--{key}'
+        flags = flags + [flag, value]
+    return flags
 
 
-def create_deployment_dir(cluster_name):
-    deployment_path = get_deployment_path(cluster_name)
-    aws_path = PurePath.joinpath(deployment_path, "aws")
-    kube_path = PurePath.joinpath(deployment_path, "kube")
-    hub_path = PurePath.joinpath(deployment_path, "hub")
-
-    # Create directory if it doesn't exist.
-    if not os.path.exists(deployment_path):
-        os.makedirs(deployment_path)
-
-    # Create directory if it doesn't exist.
-    if not os.path.exists(aws_path):
-        os.makedirs(aws_path)
-
-    # Create directory if it doesn't exist.
-    if not os.path.exists(kube_path):
-        os.makedirs(kube_path)
-
-    # Create directory if it doesn't exist.
-    if not os.path.exists(hub_path):
-        os.makedirs(hub_path)
+def kubectl(*args, input=None, **flags):
+    """Simple wrapper to kubectl."""
+    # Build command line call.
+    line = ['kubectl'] + list(args)
+    line = line + get_flag_args(**flags)
+    if input is not None:
+        line = line + ['-f', '-']
+    # Run subprocess
+    output = subprocess.run(
+        line,
+        input=input,
+        capture_output=True,
+        text=True
+    )
+    return output
 
 
-def get_params_path():
-    """Get path to Jinja templates."""
-    # THIS IS HACK... need a better method
-    path = "params"
-    base_path = os.path.dirname(os.path.abspath(__file__))
-    return os.path.join(base_path, path)
+def helm(*args, input=None, **flags):
+    """Simple wrapper to helm."""
+    # Build command line call.
+    line = ['helm'] + list(args)
+    line = line + get_flag_args(**flags)
+    if input is not None:
+        line = line + ['-f', '-']
+    # Run subprocess
+    output = subprocess.run(
+        line,
+        input=input,
+        capture_output=True,
+        text=True
+    )
+    return output
 
 
-def get_template_path():
-    """Get path to Jinja templates."""
-    # THIS IS HACK... need a better method
-    path = "templates"
-    base_path = os.path.dirname(os.path.abspath(__file__))
-    return os.path.join(base_path, path)
+def sanitize_path(path):
+    if isinstance(path, str):
+        path = pathlib.Path(path).resolve()
+    elif isinstance(path, pathlib.Path):
+        path = path.resolve()
+    else:
+        raise Exception()
+    return path
 
 
-def get_config_path():
-    """Get path to YAML configurations."""
-    # THIS IS HACK... need a better method
-    path = "configs"
-    base_path = os.path.dirname(os.path.abspath(__file__))
-    return os.path.join(base_path, path)
+def get_template(template_path, **parameters):
+    """Use jinja2 to fill in template with given parameters.
+    
+    Parameters
+    ----------
+    template_path : str
+        Name of template.
 
+    Keyword Arguments
+    -----------------
+    Parameters passed into the jinja2 template
 
-def get_kube_path(endpoint):
-    """"""
-    base_path = PurePath.join(Path.home(), ".kube", endpoint)
-    return os.path.join(base_path, kube_path)
+    Returns
+    -------
+    output_text : str
+        Template as a string filled in with parameters.
+    """
+    path = sanitize_path(template_path)
+    template_file = path.name
+    template_dir = str(path.parent)
 
+    ## Apply ARN of instance role of worker nodes and apply to cluster
+    template_loader = jinja2.FileSystemLoader(searchpath=template_dir)
+    template_env = jinja2.Environment(loader=template_loader)
 
-def read_config_file(fname):
-    config_path = os.path.join(get_config_path(), fname)
-    with open(config_path, "r") as f: 
-        data = f.read()
-    return data
+    template = template_env.get_template(template_file)
+    output_text = template.render(**parameters)
 
-
-def read_param_file(fname):
-    config_path = os.path.join(get_params_path(), fname)
-    with open(config_path, "r") as f:
-        data = json.load(f)
-    return data
-
-
-def read_deployment_file(cluster_name, fname):
-    """Read a file from the deployment directory (in ~/.kube/{cluster_name})."""
-    fpath = os.path.join(get_deployment_path(cluster_name), fname)
-    with open(fname, "r") as f:
-        data = f.read()
-    return data
+    return output_text
