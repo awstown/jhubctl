@@ -34,6 +34,11 @@ Deploy jupyterhubs on a cluster.
 $ jhubctl create hub hub1
 ```
 
+Deploy a custom configured jupyterhub using a `config.yaml` file.
+```bash
+$ jhubctl create hub hub2 --Hub.config_file="config.yaml"
+```
+
 List all running Jupyterhub deployments in a cluster.
 ```
 $ jhubctl get hub
