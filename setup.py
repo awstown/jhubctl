@@ -18,7 +18,12 @@ REQUIRES_PYTHON = '>=3.6.0'
 VERSION = None
 
 REQUIRED = [
-    "click",
+    "pyyaml",
+    "traitlets_paths",
+    "traitlets"
+    "tqdm",
+    "ipython",
+    "kubeconf",
     "boto3",
     "jinja2",
 ]
