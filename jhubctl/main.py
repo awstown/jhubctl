@@ -91,6 +91,7 @@ class JhubctlApp(Application):
         'create': ((), 'Create a resource.'),
         'delete': ((), 'Delete a resource.'),
         'get': ((), 'List a resource or resources'),
+        'describe': ((), 'Describe a resource')
     })
 
     # Resource that can be deployed and managed.
