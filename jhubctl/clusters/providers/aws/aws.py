@@ -13,7 +13,7 @@ from traitlets import (
     Unicode,
     default
 )
-from ..base import Provider
+from jhubctl.clusters.cluster import Cluster
 from ....utils import get_template
 
 
@@ -81,7 +81,7 @@ def define_parameters(**parameters):
     return params
 
 
-class AwsEKS(Provider):
+class AwsEKS(Cluster):
     """AWS EKS configured for launching JupyterHub deployments."""
     # ------------------------------------------------------------------------
     # Configurable options

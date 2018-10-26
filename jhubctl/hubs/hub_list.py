@@ -60,7 +60,6 @@ class HubList(object):
     def delete(self, name):
         """Delete Hub from Kubernetes Cluster
         """
-        print("This may take a few minutes...\n")
         hub = Hub(namespace=name, config=self.config)
         hub.delete()
 

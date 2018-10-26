@@ -1,5 +1,5 @@
 import pathlib
-from ...utils import SubclassError
+
 from traitlets.config import Configurable
 from traitlets import (
     Unicode,
@@ -7,7 +7,10 @@ from traitlets import (
     default
 )
 
-class Provider(Configurable):
+from jhubctl.utils import SubclassError
+
+
+class Cluster(Configurable):
     """Base class for Kubernetes Cluster providers.
 
     To create a new provider, inherit this class and 

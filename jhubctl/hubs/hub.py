@@ -132,6 +132,7 @@ class Hub(Configurable):
     def delete(self):
         """Delete a Jupyterhub."""
         # Delete the Helm Release
+        print(f"Deleting {self.release}, this make take a few minutes...\n")
         out = helm(
             "delete",
             self.release,
