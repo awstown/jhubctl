@@ -1,8 +1,10 @@
 import secrets
+import pathlib
 
-from jhubctl.utils import helm, kubectl
+from jhubctl.utils import helm, kubectl, YAML
 from traitlets.config import Configurable
 from traitlets import default, Unicode
+
 
 
 class Hub(Configurable):
@@ -35,19 +37,57 @@ class Hub(Configurable):
         help="Name of the Kubernetes namespace."
     ).tag(config=True)
 
+    config_file = Unicode(
+        help="Name of config.yaml for this Jupyterhub deployment. Updates the Helm chart."
+    ).tag(config=True)
+
     def __init__(self, namespace, release=None, **traits):
         self.namespace = namespace
         if release is None:
             self.release = namespace
         super().__init__(**traits)
 
-    def get_security_yaml(self):
+    def _get_security_config(self):
         """Create security YAML data."""
         # Get Token.
         token = secrets.token_hex(nbytes=32)
         # Turn token into yaml
-        yaml = f'proxy:\n  secretToken: "{token}"'
-        return yaml
+        data = {
+            'proxy': {'secretToken': token}
+        }
+        return data
+
+    def _get_config_from_cli(self):
+        """Get config.yaml items from CLI"""
+        # NOT IMPLEMENTED YET.
+        data = {}
+        return data
+
+    def _get_config_from_file(self):
+        """Get config.yaml items from named file."""
+        data = {}
+        # If a config file is given, use it.
+        if self.config_file != '':
+            text = pathlib.Path(self.config_file).read_text()
+            yaml = YAML()
+            data = yaml.load(text)     
+        return data
+        
+    def get_config(self):
+        """Build a config dictionary.
+        """
+        data = {}
+        data.update(self._get_config_from_file())
+        data.update(self._get_config_from_cli())
+        data.update(self._get_security_config())
+        return data
+
+    def get_config_yaml(self):
+        """Get config.yaml as a string.
+        """
+        data = self.get_config()
+        yaml = YAML()
+        return yaml.dump(data)
 
     def get(self):
         """Get specific information about this hub."""
@@ -60,6 +100,8 @@ class Hub(Configurable):
 
     def create(self):
         """Create a single instance of notebook."""
+        print("Deploying a JupyterHub.")
+        print("his may take a few minutes...")
         # Point to chart repo.
         out = helm(
             "repo",
@@ -70,7 +112,7 @@ class Hub(Configurable):
         out = helm("repo", "update")
 
         # Get token to secure Jupyterhub
-        secret_yaml = self.get_security_yaml()
+        config_yaml = self.get_config_yaml()
 
         # Get Jupyterhub.
         out = helm(
@@ -80,7 +122,7 @@ class Hub(Configurable):
             "jupyterhub/jupyterhub",
             namespace=self.namespace,
             version=self.version,
-            input=secret_yaml
+            input=config_yaml
         )
         if out.returncode != 0:
             print(out.stderr)

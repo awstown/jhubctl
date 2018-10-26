@@ -1,6 +1,9 @@
+import sys
 import jinja2
 import pathlib
 import subprocess
+from ruamel import yaml
+from ruamel.yaml.compat import StringIO
 
 class SubclassError(Exception):
     """Must be implemented in a subclass."""
@@ -96,3 +99,21 @@ def get_template(template_path, **parameters):
     output_text = template.render(**parameters)
 
     return output_text
+
+
+class YAML(yaml.YAML):
+    """Yaml parser with modifications for dumping string.
+
+    Borrowed from: https://yaml.readthedocs.io/en/latest/example.html#output-of-dump-as-a-string
+    """
+    default_flow_style = True
+    preserve_quotes = True
+
+    def dump(self, data, stream=None, **kw):
+        inefficient = False
+        if stream is None:
+            inefficient = True
+            stream = StringIO()
+        yaml.YAML.dump(self, data, stream, **kw)
+        if inefficient:
+            return stream.getvalue()

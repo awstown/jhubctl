@@ -1,2 +1,2 @@
-from .hubs import HubList
-from .single import Hub
+from .hub_list import HubList
+from .hub import Hub

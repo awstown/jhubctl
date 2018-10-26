@@ -20,17 +20,17 @@ VERSION = None
 REQUIRED = [
     "pyyaml",
     "traitlets_paths",
-    "traitlets"
+    "traitlets",
     "tqdm",
     "ipython",
     "kubeconf",
     "boto3",
     "jinja2",
 ]
-
+ 
 setup(
     name=NAME,
-    version="0.0.1",
+    version="0.0.2",
     description=DESCRIPTION,
     author=AUTHOR,
     author_email=EMAIL,
