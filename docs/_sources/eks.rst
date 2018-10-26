@@ -5,8 +5,23 @@ AWS Elastic Kubernetes Cluster
 
 .. _`Amazon EKS`: https://aws.amazon.com/eks/
 
-Setup
------
+Prerequisites
+-------------
+
+**jhubctl** interacts with AWS using Amazon's ``boto3`` Python API. This API requires that you have Amazon credentials configured on your local machine. 
+
+1. Install the AWS CLI.
+~~~~~~~~~~~~~~~~~~~~~~~
+
+Use ``pip`` to install the AWS command line interface.
+
+.. code-block:: bash
+
+    pip install awscli
+
+
+First, you must have **admin** privileges on the AWS account where you'll be creating resources.
+
 
 Install AWS
 -----------

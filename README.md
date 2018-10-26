@@ -4,25 +4,40 @@
 
 *jhubctl* makes it easy to deploy JupyterHub instances on Kubernetes clusters. The command line application follows a similar interface to `kubectl` and both tools work seemlessly together. *jhubctl* is not meant to replace `kubectl`; rather, it provides a simpler interface to launching, editing, and deleting JupyterHub deployments on Kubernetes Clusters. Specific Kubernetes configuration should be done using `kubectl` and `helm`.
 
+*jhubctl* is designed to work with any cloud service provider. Currently, it only supports AWS's Elastic Kubernetes Service (EKS), but we are hoping to extend it to other providers in the near future.
+
 ## Getting Started
 
-See [Installing](#installing) for directions on installation.
+### Prerequisites
+
+1. Install *jhubctl* using pip:
+
+    ```
+    pip install jhubctl
+    ```
+
+1. Give your machine access/privileges to AWS using AWS's CLI credentials. See instructions [here]().
+
+1. Launch a cluster and jupyterhub.
 
 ### Example Usage
 
-Create a cluster.
+Create clusters.
 ```bash
 $ jhubctl create cluster mycluster
+
+100%|███████████████████████████████████| 6/6 [00:07<00:00,  1.39s/it]
 ```
 
-Deploy a jupyterhub on the current cluster.
+Deploy jupyterhubs on a cluster.
 ```bash
 $ jhubctl create hub hub1
 ```
 
-List all running Jupyterhub deployments.
+List all running Jupyterhub deployments in a cluster.
 ```
 $ jhubctl get hub
+
 Running Jupyterhub Deployments (by name):
   - Name: hub1
     Url: aff02ecd6d8b111e8b8be0a21c647ea9-730724679.us-west-2.elb.amazonaws.com
@@ -33,6 +48,7 @@ Running Jupyterhub Deployments (by name):
 Describe a jupyterhub pod.
 ```
 $ jhubctl describe hub hub1
+
 Name:                     proxy-public
 Namespace:                hub1
 Labels:                   app=jupyterhub
@@ -62,18 +78,26 @@ Events:
 List current running clusters.
 ```
 $ jhubctl get cluster
+
 Running Clusters:
-prod
-test
-dev
+  - cluster1
+  - cluster2
+  - cluster3
 ```
 
-## Installing
+## Contributing
 
-Currently, this package is only available from source. Clone this repo and install using
-pip.
+Download and install this repo from source, and move into the base directory.
 ```
 git clone https://github.com/townsenddw/jhubctl
 cd jhubctl
+```
+If you use [pipenv](https://pipenv.readthedocs.io/en/latest/), you can install a developement version:
+```
+pipenv install --dev
+``` 
+
+Otherwise you can install a development version using pip
+```
 pip install -e .
 ```

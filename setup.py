@@ -28,12 +28,9 @@ REQUIRED = [
     "jinja2",
 ]
 
-# Setup kube directory.
-
-
 setup(
     name=NAME,
-    version="0.1",
+    version="0.0.1",
     description=DESCRIPTION,
     author=AUTHOR,
     author_email=EMAIL,

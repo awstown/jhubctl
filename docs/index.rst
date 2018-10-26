@@ -27,7 +27,7 @@ List clusters.
     Clusters:
       - mycluster
 
-Create Hubs.
+Create a hub.
 
 .. code-block:: bash
 
@@ -42,10 +42,15 @@ List Hub deployments.
     JupyterHubs:
       - myhub
 
-Delete clusters.
+Delete a hub.
 
 .. code-block:: bash
 
+    > jhubctl delete hub myhub
+
+Delete a cluster.
+
+.. code-block:: bash
     > jhubctl delete cluster mycluster
     100%|███████████████████████████████████| 6/6 [00:07<00:00,  1.39s/it]
 

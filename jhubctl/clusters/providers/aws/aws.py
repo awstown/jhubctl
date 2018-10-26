@@ -90,6 +90,12 @@ class AwsEKS(Provider):
     provider_source = Unicode('Amazon Web Services EKS')
     provider_alias = Unicode('aws')
 
+    @default('template_dir')
+    def _default_template_dir(self):
+        cwd = pathlib.Path(__file__).parent
+        template_dir = cwd.joinpath('templates')
+        return str(template_dir)
+
     # AWS Role NAme
     role_name = Unicode(
         help="AWS Role."
