@@ -1,5 +1,5 @@
 import pathlib
-from ...utils import SubclassError
+
 from traitlets.config import Configurable
 from traitlets import (
     Unicode,
@@ -7,7 +7,10 @@ from traitlets import (
     default
 )
 
-class Provider(Configurable):
+from jhubctl.utils import SubclassError
+
+
+class Cluster(Configurable):
     """Base class for Kubernetes Cluster providers.
 
     To create a new provider, inherit this class and 
@@ -22,18 +25,14 @@ class Provider(Configurable):
 
     # An alias for the provider. No spaces or hyphens. Underscores instead.
     provider_alias = Unicode(help="Simple alias pointing to this provider.")
+
+    # 
     cluster_name = Unicode(help="Name of cluster.")
 
     # Path to templates for this provider.
     template_dir = Unicode(
         help="Path to template"
     ).tag(config=True)
-
-    @default('template_dir')
-    def _default_template_dir(self):
-        cwd = pathlib.Path(__file__).parent
-        template_dir = cwd.joinpath('templates')
-        return str(template_dir)
 
     ssh_key_name = Unicode(
         help='User SSH key name'

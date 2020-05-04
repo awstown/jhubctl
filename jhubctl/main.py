@@ -198,6 +198,7 @@ class JhubctlApp(Application):
         # store unparsed args in extra_args
         self.extra_args = loader.extra_args
 
+
     def initialize(self, argv=None):
         """Handle specific configurations."""
         # Parse configuration items on command line.
@@ -207,8 +208,8 @@ class JhubctlApp(Application):
 
         # Initialize objects to interact with.
         self.kubeconf = KubeConf()
-        self.cluster_list = ClusterList(kubeconf=self.kubeconf)
-        self.hub_list = HubList(kubeconf=self.kubeconf)
+        self.cluster_list = ClusterList(kubeconf=self.kubeconf, config=self.config)
+        self.hub_list = HubList(kubeconf=self.kubeconf, config=self.config)
 
     def start(self):
         """Execution happening on jhubctl."""

@@ -12,6 +12,7 @@ tqdm = "*"
 pyyaml = "*"
 traitlets-paths = "*"
 kubeconf = "*"
+ruamel-yaml = "*"
 
 [dev-packages]
 "autopep8" = "*"

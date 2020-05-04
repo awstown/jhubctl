@@ -1,6 +1,6 @@
 
 from ..utils import kubectl, helm
-from .single import Hub
+from .hub import Hub
 
 class HubList(object):
     """A class to manage many Jupyterhub deployments.
@@ -11,12 +11,13 @@ class HubList(object):
         A KubeConf object for managing the kubeconfig
         on the current system.
     """
-    def __init__(self, kubeconf):
+    def __init__(self, kubeconf, config):
         self.kubeconf = kubeconf
+        self.config = config
 
     def create(self, name):
         """Create a jupyterhub deployment on the cluster."""
-        hub = Hub(namespace=name)
+        hub = Hub(namespace=name, config=self.config)
         hub.create()
 
     def get_hubs(self):
@@ -47,22 +48,22 @@ class HubList(object):
             hubs = self.get_hubs()
             print("Running Jupyterhub Deployments (by name):")
             for hub_name in hubs:
-                hub = Hub(namespace=hub_name)
+                hub = Hub(namespace=hub_name, config=self.config)
                 data = hub.get_description()
                 url = data['LoadBalancer Ingress']
                 print(f'  - Name: {hub_name}')
                 print(f'    Url: {url}')
         else:
-            hub = Hub(namespace=name)
+            hub = Hub(namespace=name, config=self.config)
             hub.get()
         
     def delete(self, name):
         """Delete Hub from Kubernetes Cluster
         """
-        hub = Hub(namespace=name)
+        hub = Hub(namespace=name, config=self.config)
         hub.delete()
 
     def describe(self, name):
         """Describe a cluster."""
-        hub = Hub(namespace=name)
+        hub = Hub(namespace=name, config=self.config)
         hub.describe()

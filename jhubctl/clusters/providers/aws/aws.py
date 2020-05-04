@@ -13,7 +13,7 @@ from traitlets import (
     Unicode,
     default
 )
-from ..base import Provider
+from jhubctl.clusters.cluster import Cluster
 from ....utils import get_template
 
 
@@ -81,7 +81,7 @@ def define_parameters(**parameters):
     return params
 
 
-class AwsEKS(Provider):
+class AwsEKS(Cluster):
     """AWS EKS configured for launching JupyterHub deployments."""
     # ------------------------------------------------------------------------
     # Configurable options
@@ -89,6 +89,12 @@ class AwsEKS(Provider):
 
     provider_source = Unicode('Amazon Web Services EKS')
     provider_alias = Unicode('aws')
+
+    @default('template_dir')
+    def _default_template_dir(self):
+        cwd = pathlib.Path(__file__).parent
+        template_dir = cwd.joinpath('templates')
+        return str(template_dir)
 
     # AWS Role NAme
     role_name = Unicode(
